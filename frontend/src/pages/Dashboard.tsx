@@ -17,6 +17,7 @@ export function Dashboard({
         files: number;
         bytes: number;
         groups: number;
+        similar_groups: number;
         recoverable: number;
       }>("/dashboard"),
   });
@@ -54,9 +55,10 @@ export function Dashboard({
           ],
           [HardDrive, "Media size", bytes(stats.data?.bytes ?? 0)],
           [Layers3, "Exact-match groups", stats.data?.groups ?? 0],
+          [Layers3, "Similar-media groups", stats.data?.similar_groups ?? 0],
           [
             ArrowUpRight,
-            "Potential to recover",
+            "Exact-copy savings",
             bytes(stats.data?.recoverable ?? 0),
           ],
         ].map(([Icon, label, value]) => {

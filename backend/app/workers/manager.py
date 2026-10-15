@@ -6,11 +6,15 @@ from pathlib import Path
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from app.core.filesystem import identity, stored_identity, protection, volume_key, IMAGE_EXTENSIONS
-from app.database.models import ScanJob, ScanRoot, Volume, File, MediaMetadata, FileHash, now
+from app.database.models import ScanJob, ScanRoot, Volume, File, MediaMetadata, FileHash, Fingerprint, now
 from app.hashing.sha256 import hash_file, ScanStopped
 from app.metadata.extract import extract
+from app.core.media_tools import executable
 from app.scanner.discovery import discover
 from app.grouping.exact import build_groups
+from app.similarity.images import fingerprint_image, build_similar_groups, ALGORITHM, VERSION
+from app.similarity import temporal
+from app.similarity.sequences import build_sequence_groups
 
 log = logging.getLogger("media_cleaner.scan")
 
@@ -173,6 +177,13 @@ class JobManager:
                 job.stage = "grouping"
                 session.commit()
                 build_groups(session, scan_id, checkpoint)
+                if options["mode"] == "similar":
+                    job.stage = "grouping_similar_media"
+                    session.commit()
+                    build_similar_groups(session, scan_id, options.get("sensitivity", "balanced"), checkpoint)
+                    build_sequence_groups(
+                        session, scan_id, options.get("sensitivity", "balanced"), checkpoint
+                    )
                 checkpoint()
                 session.refresh(job)
                 job.status, job.stage, job.updated_at = "completed", "complete", now()
@@ -206,23 +217,94 @@ class JobManager:
             key = expected.key(file.path)
             cached = session.get(FileHash, key)
             media_type = file.media_type
+            similar = session.get(ScanJob, scan_id).options["mode"] == "similar"
+            candidate = candidate or similar
+            sequence = similar and temporal.temporal_kind(path, media_type)
+            algorithm, version = (temporal.ALGORITHM, temporal.VERSION) if sequence else (ALGORITHM, VERSION)
+            descriptor = None
+            previous = (
+                session.scalar(
+                    select(Fingerprint)
+                    .where(
+                        Fingerprint.cache_key == key,
+                        Fingerprint.algorithm == algorithm,
+                        Fingerprint.version == version,
+                    )
+                    .limit(1)
+                )
+                if similar
+                else None
+            )
         try:
             if identity(path) != expected:
                 raise ValueError("File changed since discovery; start a new scan")
             digest = None
             if cached:
-                fields, warnings = cached.metadata_fields, cached.metadata_warnings
+                fields, warnings = cached.metadata_fields, list(cached.metadata_warnings)
+                warnings = [
+                    warning
+                    for warning in warnings
+                    if not warning.startswith(
+                        (
+                            "Visual comparison unavailable:",
+                            "Animated images require",
+                            "Too little visual detail",
+                            "Not enough informative",
+                        )
+                    )
+                ]
+                if media_type == "video" and executable("ffprobe") and not fields.get("duration"):
+                    fields, warnings = extract(path, media_type)
                 if candidate:
                     digest = cached.digest or hash_file(path, expected, checkpoint)
             else:
                 fields, warnings = extract(path, media_type)
                 if candidate:
                     digest = hash_file(path, expected, checkpoint)
+            metadata_warnings = list(warnings)
+            if similar:
+                try:
+                    if previous:
+                        descriptor = previous.value
+                    elif sequence:
+                        descriptor = (
+                            temporal.fingerprint_video(path, checkpoint)
+                            if media_type == "video"
+                            else temporal.fingerprint_animation(path, checkpoint)
+                        )
+                    else:
+                        descriptor = fingerprint_image(path)
+                    if "skipped" in descriptor and descriptor["skipped"] not in warnings:
+                        warnings = list(warnings) + [descriptor["skipped"]]
+                except ScanStopped:
+                    raise
+                except Exception as exc:
+                    warning = f"Visual comparison unavailable: {str(exc) if isinstance(exc, ValueError) else type(exc).__name__}"
+                    if warning not in warnings:
+                        warnings = list(warnings) + [warning]
             if identity(path) != expected:
                 raise ValueError("File changed while processing")
             with self.sessions.begin() as session:
                 file = session.get(File, file_id)
                 file.sha256, file.status, file.error = digest, "ready", None
+                if descriptor is not None:
+                    saved = session.scalar(
+                        select(Fingerprint).where(
+                            Fingerprint.file_id == file_id,
+                            Fingerprint.algorithm == algorithm,
+                            Fingerprint.version == version,
+                        )
+                    )
+                    if not saved:
+                        session.add(
+                            Fingerprint(
+                                file_id=file_id,
+                                algorithm=algorithm,
+                                version=version,
+                                cache_key=key,
+                                value=descriptor,
+                            )
+                        )
                 old = session.get(MediaMetadata, file_id)
                 if old:
                     old.fields, old.warnings = fields, warnings
@@ -232,10 +314,14 @@ class JobManager:
                 if cache_entry:
                     if digest:
                         cache_entry.digest = digest
+                    cache_entry.metadata_fields, cache_entry.metadata_warnings = fields, metadata_warnings
                 else:
                     session.add(
                         FileHash(
-                            cache_key=key, digest=digest, metadata_fields=fields, metadata_warnings=warnings
+                            cache_key=key,
+                            digest=digest,
+                            metadata_fields=fields,
+                            metadata_warnings=metadata_warnings,
                         )
                     )
                 job = session.get(ScanJob, scan_id)

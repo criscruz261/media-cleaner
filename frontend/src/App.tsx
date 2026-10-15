@@ -152,7 +152,7 @@ export function App() {
           </span>
         </div>
         <div className="sidebar-footer">
-          PHASE 1 <span>v0.1.0</span>
+          PHASE 3 <span>v0.1.0</span>
         </div>
       </aside>
       <div className="workspace">

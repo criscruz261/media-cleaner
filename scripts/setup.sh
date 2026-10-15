@@ -12,6 +12,7 @@ command -v npm >/dev/null || { echo 'Node 22.12+ and npm are required.' >&2; exi
 "$python_bin" -m venv .venv-phase1
 .venv-phase1/bin/python -m pip install -r backend/requirements-dev.lock
 .venv-phase1/bin/python -m pip install --no-deps -e backend
+.venv-phase1/bin/python scripts/install-media-tools.py
 npm ci --prefix frontend
 npm run build --prefix frontend
 printf 'Setup complete. Run ./run.sh and open the printed launch link.\n'

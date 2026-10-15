@@ -121,6 +121,7 @@ class Fingerprint(Base):
     __table_args__ = (UniqueConstraint("file_id", "algorithm", "version"),)
     id: Mapped[str] = mapped_column(primary_key=True, default=uid)
     file_id: Mapped[str] = mapped_column(ForeignKey("files.id"))
+    cache_key: Mapped[str | None] = mapped_column(index=True)
     algorithm: Mapped[str]
     version: Mapped[str]
     value: Mapped[dict] = mapped_column(JSON)

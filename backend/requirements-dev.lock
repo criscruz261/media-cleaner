@@ -14,12 +14,23 @@ certifi==2026.7.22
     # via
     #   httpcore
     #   httpx
+    #   requests
+cffi==2.1.1 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and platform_python_implementation != 'PyPy' and sys_platform == 'linux'
+    # via cryptography
+charset-normalizer==3.5.2
+    # via requests
 click==8.5.0
     # via uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
     # via pytest
+cryptography==50.0.2 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and sys_platform == 'linux'
+    # via secretstorage
+docutils==0.23
+    # via readme-renderer
 fastapi==0.143.2
     # via media-cleaner-backend (backend/pyproject.toml)
+filelock==4.2.0
+    # via static-ffmpeg
 h11==0.16.0
     # via
     #   httpcore
@@ -28,23 +39,60 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via media-cleaner-backend (backend/pyproject.toml)
+id==1.6.1
+    # via twine
 idna==3.20
     # via
     #   anyio
     #   httpx
+    #   requests
+imagehash==4.3.2
+    # via media-cleaner-backend (backend/pyproject.toml)
 iniconfig==2.3.1
     # via pytest
+jaraco-classes==3.4.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
+    # via keyring
+jaraco-context==6.1.2 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
+    # via keyring
+jaraco-functools==4.6.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
+    # via keyring
+jeepney==0.9.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and sys_platform == 'linux'
+    # via
+    #   keyring
+    #   secretstorage
+keyring==25.7.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
+    # via twine
 mako==1.4.3
     # via alembic
+markdown-it-py==4.2.0
+    # via rich
 markupsafe==3.0.4
     # via mako
+mdurl==0.1.2
+    # via markdown-it-py
+more-itertools==11.2.1 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
+    # via
+    #   jaraco-classes
+    #   jaraco-functools
+nh3==0.3.7
+    # via readme-renderer
+numpy==2.5.4
+    # via
+    #   imagehash
+    #   pywavelets
+    #   rawpy
+    #   scipy
+    #   tifffile
 opentelemetry-api==1.45.1
     # via fastapi
 packaging==26.3
-    # via pytest
+    # via
+    #   pytest
+    #   twine
 pillow==12.3.0
     # via
     #   media-cleaner-backend (backend/pyproject.toml)
+    #   imagehash
     #   pillow-heif
 pillow-heif==1.8.1
     # via media-cleaner-backend (backend/pyproject.toml)
@@ -52,6 +100,10 @@ platformdirs==4.13.0
     # via media-cleaner-backend (backend/pyproject.toml)
 pluggy==1.7.0
     # via pytest
+progress==1.6.1
+    # via static-ffmpeg
+pycparser==3.11 ; implementation_name != 'PyPy' and platform_machine != 'ppc64le' and platform_machine != 's390x' and platform_python_implementation != 'PyPy' and sys_platform == 'linux'
+    # via cffi
 pydantic==2.14.1
     # via
     #   media-cleaner-backend (backend/pyproject.toml)
@@ -59,11 +111,37 @@ pydantic==2.14.1
 pydantic-core==2.50.1
     # via pydantic
 pygments==2.21.0
-    # via pytest
+    # via
+    #   pytest
+    #   readme-renderer
+    #   rich
 pytest==9.1.1
     # via media-cleaner-backend (backend/pyproject.toml)
+pywavelets==1.10.0
+    # via imagehash
+pywin32-ctypes==0.2.3 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and sys_platform == 'win32'
+    # via keyring
+rawpy==0.27.1
+    # via media-cleaner-backend (backend/pyproject.toml)
+readme-renderer==46.0
+    # via twine
+requests==2.34.2
+    # via
+    #   requests-toolbelt
+    #   static-ffmpeg
+    #   twine
+requests-toolbelt==1.0.0
+    # via twine
+rfc3986==2.0.0
+    # via twine
+rich==15.0.0
+    # via twine
 ruff==0.17.0
     # via media-cleaner-backend (backend/pyproject.toml)
+scipy==1.18.1
+    # via imagehash
+secretstorage==3.5.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and sys_platform == 'linux'
+    # via keyring
 send2trash==2.1.0
     # via media-cleaner-backend (backend/pyproject.toml)
 sqlalchemy==2.1.4
@@ -72,6 +150,12 @@ sqlalchemy==2.1.4
     #   alembic
 starlette==1.8.0
     # via fastapi
+static-ffmpeg==3.0
+    # via media-cleaner-backend (backend/pyproject.toml)
+tifffile==2026.9.20
+    # via media-cleaner-backend (backend/pyproject.toml)
+twine==7.0.0
+    # via static-ffmpeg
 typing-extensions==4.16.0
     # via
     #   alembic
@@ -87,5 +171,10 @@ typing-inspection==0.4.4
     # via
     #   fastapi
     #   pydantic
+urllib3==2.8.0
+    # via
+    #   id
+    #   requests
+    #   twine
 uvicorn==0.54.0
     # via media-cleaner-backend (backend/pyproject.toml)

@@ -29,7 +29,20 @@ export type Group = {
   id: string;
   scan_id: string;
   classification: string;
-  evidence: { sha256: string; algorithm: string };
+  evidence: {
+    sha256?: string;
+    algorithm: string;
+    max_phash_distance?: number;
+    max_dhash_distance?: number;
+    phash_limit?: number;
+    dhash_limit?: number;
+    note?: string;
+    media_kind?: string;
+    sample_count?: number;
+    minimum_matched_samples?: number;
+    max_duration_difference_seconds?: number;
+    member_kinds?: string[];
+  };
   recommendation: string;
   recommended_id: string | null;
   recoverable: number;
@@ -41,6 +54,7 @@ export type CleanupItem = {
   file_id: string;
   source: string;
   keeper: string;
+  classification?: string;
   size: number;
   status: string;
   quarantine_path: string | null;

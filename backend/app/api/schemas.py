@@ -4,10 +4,11 @@ from pydantic import BaseModel, Field
 
 class ScanRequest(BaseModel):
     roots: list[str] = Field(min_length=1, max_length=32)
-    mode: Literal["exact", "images", "videos"] = "exact"
+    mode: Literal["exact", "images", "videos", "similar"] = "exact"
     excluded_directories: list[str] = Field(default_factory=list, max_length=128)
     excluded_extensions: list[str] = Field(default_factory=list, max_length=128)
     include_hidden: bool = False
+    sensitivity: Literal["strict", "balanced", "broad"] = "balanced"
 
 
 class ReviewRequest(BaseModel):
@@ -16,6 +17,7 @@ class ReviewRequest(BaseModel):
 
 
 class PlanRequest(BaseModel):
+    group_id: str | None = None
     file_ids: list[str] = Field(min_length=1, max_length=1000)
     destination: Literal["trash", "quarantine"] = "trash"
 

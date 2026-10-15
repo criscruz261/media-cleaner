@@ -7,6 +7,7 @@ IMAGE_EXTENSIONS = {
     ".jpg",
     ".jpeg",
     ".png",
+    ".apng",
     ".heic",
     ".heif",
     ".webp",
@@ -22,6 +23,11 @@ IMAGE_EXTENSIONS = {
     ".arw",
     ".orf",
     ".rw2",
+    ".raf",
+    ".pef",
+    ".srw",
+    ".3fr",
+    ".rwl",
 }
 VIDEO_EXTENSIONS = {
     ".mp4",
@@ -41,7 +47,20 @@ VIDEO_EXTENSIONS = {
     ".insv",
     ".lrv",
 }
-RAW_EXTENSIONS = {".dng", ".cr2", ".cr3", ".nef", ".arw", ".orf", ".rw2"}
+RAW_EXTENSIONS = {
+    ".dng",
+    ".cr2",
+    ".cr3",
+    ".nef",
+    ".arw",
+    ".orf",
+    ".rw2",
+    ".raf",
+    ".pef",
+    ".srw",
+    ".3fr",
+    ".rwl",
+}
 
 
 @dataclass(frozen=True)
@@ -79,7 +98,7 @@ def protection(path: Path, protected: list[str]) -> str | None:
     if contained(path, protected):
         return "Protected directory"
     if path.suffix.lower() in RAW_EXTENSIONS:
-        return "RAW original: cleanup is protected in Phase 1"
+        return "RAW original: protected from cleanup"
     # A filename is not proof of pairing. Conservatively protect potential pairs.
     companions = VIDEO_EXTENSIONS if path.suffix.lower() in IMAGE_EXTENSIONS else IMAGE_EXTENSIONS
     for extension in companions:

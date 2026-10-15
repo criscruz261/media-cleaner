@@ -72,6 +72,18 @@ export function Cleanup({
             files and retained copies will be rehashed before cleanup. Trash
             failures are reported; there is no fallback to permanent deletion.
           </p>
+          {plan.items.some(
+            (item) => item.classification === "SIMILAR_CONTENT",
+          ) && (
+            <div className="notice">
+              <p>
+                These media files look similar but may contain different moments
+                or audio. This is your manual removal choice, not proof they are
+                duplicates. Compare the full images or playback and sound before
+                confirming.
+              </p>
+            </div>
+          )}
           <div className="cleanup-files">
             {plan.items.map((item) => (
               <div key={item.file_id}>

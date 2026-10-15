@@ -33,7 +33,7 @@ export function Review({
         <div>
           <div className="eyebrow">LESS GUESSWORK, MORE CONTROL</div>
           <h1>Review the repeats.</h1>
-          <p>Exact bytes. Clear evidence. You decide what stays.</p>
+          <p>Exact copies and similar media. You decide what stays.</p>
         </div>
         <select
           aria-label="Choose scan to review"
@@ -54,9 +54,11 @@ export function Review({
       <div className="notice">
         <ShieldCheck size={18} />
         <p>
-          Only complete SHA-256 matches appear here. Copy-name recommendations
-          are advisory. RAW originals, protected folders, and potential
-          photo/video companions stay protected.
+          Exact copies and approximate media matches are labeled separately.
+          Similar groups keep everything selected until you review them. A file
+          may appear in both an exact and a similar group. Copy-name
+          recommendations are advisory. RAW originals, protected folders, and
+          potential photo/video companions stay protected.
         </p>
       </div>
       {!scanId ? (
@@ -69,8 +71,8 @@ export function Review({
         <Loading />
       ) : !groups.data?.items.length ? (
         <Empty title="No exact-match groups">
-          Run a scan or choose a completed scan above. Similar-image and
-          video-content analysis are later phases.
+          Run a similar-media scan or choose a completed scan above. Video
+          content similarity is not included yet.
         </Empty>
       ) : (
         groups.data.items.map((group) => (
@@ -126,6 +128,7 @@ function GroupCard({
       api<Cleanup>("/cleanup/plan", {
         file_ids: eligible.map((file) => file.id),
         destination,
+        group_id: group.id,
       }),
     onSuccess: onPlan,
   });
@@ -134,20 +137,69 @@ function GroupCard({
       <div className="section-heading">
         <div>
           <h2>
-            <Layers3 size={18} /> {group.member_count} exact copies
+            <Layers3 size={18} /> {group.member_count}{" "}
+            {group.classification === "EXACT_DUPLICATE"
+              ? "exact copies"
+              : group.evidence.media_kind === "sequence"
+                ? "similar videos / animations"
+                : "similar photos"}
           </h2>
-          <span className="badge exact">EXACT DUPLICATE</span>
+          <span className="badge exact">
+            {group.classification === "EXACT_DUPLICATE"
+              ? "EXACT DUPLICATE"
+              : "SIMILAR MEDIA · REVIEW REQUIRED"}
+          </span>
         </div>
         <strong>{bytes(group.recoverable)} potential</strong>
       </div>
       <p className="recommendation">{group.recommendation}</p>
       <details className="evidence">
-        <summary>Matching evidence · SHA-256</summary>
-        <code>{group.evidence.sha256}</code>
-        <p>
-          Same file size and complete SHA-256 digest. Algorithm:{" "}
-          {group.evidence.algorithm}.
-        </p>
+        <summary>
+          Matching evidence ·{" "}
+          {group.classification === "EXACT_DUPLICATE"
+            ? "SHA-256"
+            : group.evidence.media_kind === "sequence"
+              ? "time-spaced frames"
+              : "pHash + dHash"}
+        </summary>
+        {group.classification === "EXACT_DUPLICATE" ? (
+          <>
+            <code>{group.evidence.sha256}</code>
+            <p>
+              Same file size and complete SHA-256 digest. Algorithm:{" "}
+              {group.evidence.algorithm}.
+            </p>
+          </>
+        ) : group.evidence.media_kind === "sequence" ? (
+          <>
+            <p>
+              At least {group.evidence.minimum_matched_samples} of{" "}
+              {group.evidence.sample_count} time-spaced visual samples match for
+              each pair. Maximum duration difference:{" "}
+              {group.evidence.max_duration_difference_seconds?.toFixed(3)}{" "}
+              seconds.
+            </p>
+            <p>
+              Frame pHash limit: {group.evidence.phash_limit}/64; dHash limit:{" "}
+              {group.evidence.dhash_limit}/64. Every group pair qualifies.{" "}
+              {group.evidence.note}
+            </p>
+          </>
+        ) : (
+          <>
+            <p>
+              Maximum pairwise pHash distance:{" "}
+              {group.evidence.max_phash_distance}/64 (limit{" "}
+              {group.evidence.phash_limit}). Maximum dHash distance:{" "}
+              {group.evidence.max_dhash_distance}/64 (limit{" "}
+              {group.evidence.dhash_limit}).
+            </p>
+            <p>
+              Every member passes both thresholds against every other member,
+              with aspect and color checks. {group.evidence.note}
+            </p>
+          </>
+        )}
       </details>
       {detail.isPending ? (
         <Loading />

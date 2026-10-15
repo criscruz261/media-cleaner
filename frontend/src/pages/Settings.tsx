@@ -154,8 +154,9 @@ export function Settings() {
       <section className="panel">
         <h2>Media tools</h2>
         <p className="muted">
-          Exact duplicate detection works without external tools. Install
-          FFprobe and ExifTool for richer video and RAW metadata.
+          Video similarity uses FFmpeg and FFprobe installed during setup. RAW
+          previews use rawpy/LibRaw. ExifTool is optional for additional
+          metadata. No tools are downloaded during scanning.
         </p>
         <div className="tool-list">
           {Object.entries(health.data?.tools ?? {}).map(([tool, available]) => (

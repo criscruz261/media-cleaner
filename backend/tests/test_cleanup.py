@@ -131,3 +131,27 @@ def test_quarantine_symlink_is_rejected(client, workspace):
     assert response.json()["status"] == "partial"
     assert all(Path(file["path"]).exists() for file in group["files"])
     assert not list(elsewhere.iterdir())
+
+
+def test_batch_cleanup_across_exact_groups_remains_supported(client, workspace):
+    from conftest import scan
+
+    for name, content in [
+        ("a.MOV", b"first"),
+        ("a copy.MOV", b"first"),
+        ("b.MOV", b"second"),
+        ("b copy.MOV", b"second"),
+    ]:
+        (workspace / name).write_bytes(content)
+    job = scan(client, [workspace])
+    groups = client.get("/api/v1/groups?scan_id=" + job["id"]).json()["items"]
+    ids = []
+    for group in groups:
+        detail = client.get("/api/v1/groups/" + group["id"]).json()
+        ids.extend(file["id"] for file in detail["files"] if not file["keep"])
+    response = client.post("/api/v1/cleanup/plan", json={"file_ids": ids, "destination": "quarantine"})
+    assert response.status_code == 201, response.text
+    outcome = execute(client, response.json())
+    assert outcome.status_code == 200, outcome.text
+    assert outcome.json()["status"] == "completed", outcome.json()
+    assert (workspace / "a.MOV").exists() and (workspace / "b.MOV").exists()

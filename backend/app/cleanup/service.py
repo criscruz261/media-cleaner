@@ -19,7 +19,7 @@ class CleanupService:
         self.sessions = sessions
         self.settings = settings
 
-    def validate(self, session, ids: list[str], rehash: bool) -> list[dict]:
+    def validate(self, session, ids: list[str], rehash: bool, group_id: str | None = None) -> list[dict]:
         if not ids or len(ids) != len(set(ids)):
             raise ValueError("Choose one or more distinct files")
         if session.scalar(select(ScanJob.id).where(ScanJob.status.in_(["running", "queued"]))):
@@ -31,13 +31,21 @@ class CleanupService:
                 raise ValueError("File is unavailable or not a verified duplicate")
             if session.get(ScanJob, file.scan_id).status != "completed":
                 raise ValueError("Only completed scans can be used for cleanup")
-            member = session.scalar(
+            membership_query = (
                 select(GroupMember)
                 .join(DuplicateGroup)
-                .where(GroupMember.file_id == file_id, DuplicateGroup.classification == "EXACT_DUPLICATE")
+                .where(GroupMember.file_id == file_id)
+                .order_by(DuplicateGroup.classification)
             )
+            if group_id:
+                membership_query = membership_query.where(GroupMember.group_id == group_id)
+            member = session.scalar(membership_query.limit(1))
             if not member or member.keep:
                 raise ValueError("Only files explicitly unchecked during review may be cleaned up")
+            group = session.get(DuplicateGroup, member.group_id)
+            approximate = group.classification != "EXACT_DUPLICATE"
+            if approximate and (not group_id or group.review_status != "reviewed"):
+                raise ValueError("Similar photos require manual review and an explicit group cleanup plan")
             path = Path(file.path)
             reason = file.protected_reason or protection(path, self.settings().protected_directories)
             if reason:
@@ -56,13 +64,15 @@ class CleanupService:
             ).all()
             if not keepers:
                 raise ValueError("Keep at least one verified file in every group")
-            keeper = next((candidate for candidate in keepers if candidate.sha256 == file.sha256), None)
+            keeper = next(
+                (candidate for candidate in keepers if approximate or candidate.sha256 == file.sha256), None
+            )
             if not keeper or identity(Path(keeper.path)) != stored_identity(keeper):
                 raise ValueError("Retained copy is missing or changed; scan again")
             if rehash:
                 if hash_file(path, stored_identity(file)) != file.sha256:
                     raise ValueError("Selected file content changed")
-                if hash_file(Path(keeper.path), stored_identity(keeper)) != file.sha256:
+                if hash_file(Path(keeper.path), stored_identity(keeper)) != keeper.sha256:
                     raise ValueError("Retained file content changed")
             items.append(
                 {
@@ -71,6 +81,8 @@ class CleanupService:
                     "size": file.size,
                     "sha256": file.sha256,
                     "keeper_id": keeper.id,
+                    "group_id": member.group_id,
+                    "classification": group.classification,
                     "keeper": keeper.path,
                     "status": "planned",
                     "quarantine_path": None,
@@ -79,11 +91,11 @@ class CleanupService:
             )
         return items
 
-    def plan(self, ids: list[str], destination: str):
+    def plan(self, ids: list[str], destination: str, group_id: str | None = None):
         if destination not in {"trash", "quarantine"}:
             raise ValueError("Choose Trash or same-volume quarantine; permanent deletion is unavailable")
         with self.sessions.begin() as session:
-            items = self.validate(session, ids, rehash=False)
+            items = self.validate(session, ids, rehash=False, group_id=group_id)
             operation = CleanupOperation(
                 destination=destination,
                 token=secrets.token_urlsafe(32),
@@ -110,7 +122,11 @@ class CleanupService:
                 raise ValueError("Cleanup plan expired; create a new preview")
             ids = [item["file_id"] for item in operation.items]
             # Whole-plan validation completes before any filesystem mutation.
-            self.validate(session, ids, rehash=True)
+            group_ids = {item.get("group_id") for item in operation.items}
+            group_id = next(iter(group_ids)) if len(group_ids) == 1 else None
+            fresh = self.validate(session, ids, rehash=True, group_id=group_id)
+            if any(old["keeper_id"] != new["keeper_id"] for old, new in zip(operation.items, fresh)):
+                raise ValueError("Keep choices changed after this preview; create a new cleanup plan")
             operation.status = "executing"
             destination = operation.destination
             log.info("cleanup_started")
@@ -122,7 +138,9 @@ class CleanupService:
                 file = session.get(File, file_id)
                 try:
                     # Recheck each item and its keeper immediately before moving.
-                    self.validate(session, [file_id], rehash=True)
+                    fresh = self.validate(session, [file_id], rehash=True, group_id=item.get("group_id"))
+                    if fresh[0]["keeper_id"] != item["keeper_id"]:
+                        raise ValueError("Retained copy changed after confirmation")
                     if destination == "quarantine":
                         target = (
                             Path(file.path).parent

@@ -6,7 +6,7 @@ from app.api.main import create_app
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Media Cleaner · local Phase 1 workspace")
+    parser = argparse.ArgumentParser(description="Media Cleaner · local media workspace")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--data-dir", type=Path)
     args = parser.parse_args()

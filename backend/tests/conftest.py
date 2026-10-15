@@ -24,7 +24,8 @@ def scan(client, roots, **options):
     response = client.post("/api/v1/scans", json={"roots": [str(root) for root in roots], **options})
     assert response.status_code == 201, response.text
     scan_id = response.json()["id"]
-    for _ in range(400):
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
         job = client.get(f"/api/v1/scans/{scan_id}").json()
         if job["status"] not in {"queued", "running"}:
             return job

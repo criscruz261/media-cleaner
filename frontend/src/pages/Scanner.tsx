@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Play, Pause, Square, ArrowRight } from "lucide-react";
 import { api, bytes } from "../services/api";
 import { useScanProgress } from "../hooks/useScanProgress";
-import { ErrorMessage } from "../components/ui";
-import type { Scan } from "../types/api";
+import { ErrorMessage, Pagination } from "../components/ui";
+import type { Scan, Page } from "../types/api";
 export function Scanner({
   scanId,
   selectScan,
@@ -18,7 +18,9 @@ export function Scanner({
     [excluded, setExcluded] = useState(""),
     [extensions, setExtensions] = useState(""),
     [hidden, setHidden] = useState(false),
-    [mode, setMode] = useState("exact");
+    [mode, setMode] = useState("similar"),
+    [sensitivity, setSensitivity] = useState("balanced"),
+    [warningOffset, setWarningOffset] = useState(0);
   const client = useQueryClient();
   const scan = useQuery({
     queryKey: ["scan", scanId],
@@ -27,6 +29,16 @@ export function Scanner({
     refetchInterval: 2000,
   });
   useScanProgress(scan.data);
+  const warnings = useQuery({
+    queryKey: ["scan-warnings", scanId, warningOffset],
+    queryFn: () =>
+      api<Page<{ id: string; path: string; warnings: string[] }>>(
+        `/scans/${scanId}/warnings?offset=${warningOffset}&limit=20`,
+      ),
+    enabled:
+      !!scanId &&
+      !["queued", "running"].includes(scan.data?.status ?? "running"),
+  });
   const start = useMutation({
     mutationFn: () =>
       api<Scan>("/scans", {
@@ -41,9 +53,11 @@ export function Scanner({
           .filter(Boolean),
         include_hidden: hidden,
         mode,
+        sensitivity,
       }),
     onSuccess: (scan) => {
       selectScan(scan.id);
+      setWarningOffset(0);
       client.invalidateQueries();
     },
   });
@@ -115,6 +129,9 @@ export function Scanner({
                 value={mode}
                 onChange={(e) => setMode(e.target.value)}
               >
+                <option value="similar">
+                  Similar photos, videos & animations
+                </option>
                 <option value="exact">Exact duplicates · all media</option>
                 <option value="images">Images · exact duplicates</option>
                 <option value="videos">Videos · exact duplicates</option>
@@ -130,6 +147,28 @@ export function Scanner({
               />
             </div>
           </div>
+          {mode === "similar" && (
+            <div>
+              <label htmlFor="sensitivity">Media similarity sensitivity</label>
+              <select
+                id="sensitivity"
+                value={sensitivity}
+                onChange={(event) => setSensitivity(event.target.value)}
+              >
+                <option value="strict">Strict · fewer, closer matches</option>
+                <option value="balanced">
+                  Balanced · re-encoded and lightly edited media
+                </option>
+                <option value="broad">Broad · more candidates to review</option>
+              </select>
+              <p className="hint">
+                Photo pHash + dHash and time-spaced video/animation frame
+                comparisons. Videos may have different audio. Crops, trims and
+                partial clips can be missed. Unsupported decoders are reported
+                below the scan.
+              </p>
+            </div>
+          )}
           <label htmlFor="excluded">
             Excluded folders · one absolute path per line
           </label>
@@ -149,7 +188,8 @@ export function Scanner({
           </label>
           <div className="form-footer">
             <p className="muted">
-              SHA-256 verifies complete file contents. No media is uploaded.
+              All analysis stays local. Similar-media results require manual
+              review; exact copies are verified with SHA-256.
             </p>
             <button className="primary" disabled={active || start.isPending}>
               Start scan <ArrowRight size={16} />
@@ -211,6 +251,28 @@ export function Scanner({
           </div>
           <ErrorMessage error={control.error} />
           <ErrorMessage error={scan.data.error} />
+          {!!warnings.data?.total && (
+            <details>
+              <summary>
+                {warnings.data.total} files have warnings or skipped comparisons
+              </summary>
+              {warnings.data.items.map((file) => (
+                <div className="operation-item" key={file.id}>
+                  <strong>{file.path}</strong>
+                  {file.warnings.map((warning, index) => (
+                    <p key={index}>{warning}</p>
+                  ))}
+                </div>
+              ))}
+              <Pagination
+                offset={warningOffset}
+                total={warnings.data.total}
+                size={20}
+                onChange={setWarningOffset}
+              />
+            </details>
+          )}
+          <ErrorMessage error={warnings.error} />
         </section>
       )}
     </>

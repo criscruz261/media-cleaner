@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Scanner } from "./Scanner";
 describe("scanner", () => {
-  it("submits multiple real roots and exclusions and exposes only Phase 1 modes", async () => {
+  it("submits multiple real roots and exclusions and enables similar-photo scanning", async () => {
     const fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({ id: "scan-id", status: "completed" }),
@@ -26,14 +26,16 @@ describe("scanner", () => {
       target: { value: ".lrv, .insv" },
     });
     expect(
-      screen.queryByRole("option", { name: /similarity/ }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("option", { name: /Similar photos, videos/ }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start scan" }));
     await waitFor(() => expect(select).toHaveBeenCalledWith("scan-id"));
     const body = JSON.parse(
       (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
         .body as string,
     );
+    expect(body.mode).toBe("similar");
+    expect(body.sensitivity).toBe("balanced");
     expect(body.roots).toEqual(["/photos", "/Volumes/External"]);
     expect(body.excluded_extensions).toEqual([".lrv", ".insv"]);
     vi.unstubAllGlobals();

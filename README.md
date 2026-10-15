@@ -1,8 +1,8 @@
-# Media Cleaner · Phase 1
+# Media Cleaner · Similar photos, videos and animations
 
-A local-first media inventory, exact duplicate reviewer, and recoverable cleanup workspace. React + TypeScript + Vite + Tailwind + TanStack Query, backed by Python 3.12+, FastAPI, Pydantic, SQLAlchemy, Alembic, and SQLite WAL.
+A local-first media inventory, exact and similar-media reviewer, and recoverable cleanup workspace. React + TypeScript + Vite + Tailwind + TanStack Query, backed by Python 3.12+, FastAPI, Pydantic, SQLAlchemy, Alembic, and SQLite WAL.
 
-**Phase 1 is implemented. Advanced image similarity, re-encoded video matching, and Tauri installers are later phases.** Only complete SHA-256 equality is classified as `EXACT_DUPLICATE` in this version. The earlier PhotoFold app is preserved in `legacy/`; it is not launched by the new scripts and its old permanent-delete workflow is not part of the new application.
+**Similarity now covers supported still photos, camera RAW, videos and animated images.** Images use versioned pHash/dHash; videos and animations use multiple time-spaced frame comparisons. Approximate groups are `SIMILAR_CONTENT` and require manual review. Only complete SHA-256 equality is `EXACT_DUPLICATE`. Unsupported decoders are reported rather than silently skipped. Audio is not compared, and arbitrary trims/crops/partial clips and Tauri installers remain later work. See the [media-similarity implementation and limits](docs/phase-3.md). The earlier PhotoFold app remains archived in `legacy/`.
 
 ## Run on this workspace
 
@@ -34,20 +34,20 @@ Windows PowerShell:
 ./scripts/run.ps1
 ```
 
-Setup installs the pinned Python dependencies, the editable backend, frontend dependencies from package-lock.json, and a production frontend build. For frontend development, run the backend in one terminal and `npm run dev --prefix frontend` in another; visit the Vite URL and paste the backend's launch token. Vite proxies `/api` to port 8765. VS Code tasks and pytest settings are included.
+Setup installs the pinned Python dependencies, the editable backend, frontend dependencies from package-lock.json, a production frontend build, and setup-time FFmpeg/FFprobe installation when missing. For frontend development, run the backend in one terminal and `npm run dev --prefix frontend` in another; visit the Vite URL and paste the backend's launch token. Vite proxies `/api` to port 8765. VS Code tasks and pytest settings are included.
 
-Optional metadata tools: install FFmpeg (including FFprobe) and ExifTool on PATH. See [dependencies](docs/dependencies.md). Missing tools are shown in Settings and per-file metadata warnings. Exact hashing works without them. Native folder dialogs use macOS AppleScript, Windows FolderBrowserDialog, or Linux Zenity/KDialog; paste paths when a dialog is unavailable.
+FFmpeg/FFprobe are installed during setup or can be provided on PATH. ExifTool is optional for richer metadata. Scanning never downloads tools. See [dependencies](docs/dependencies.md). Missing tools and skipped comparisons are shown in Settings and the scanner’s paginated warnings list. Exact hashing works without them. Native folder dialogs use macOS AppleScript, Windows FolderBrowserDialog, or Linux Zenity/KDialog; paste paths when a dialog is unavailable.
 
 ## Use
 
-1. In **Scanner**, add one or more folders (including mounted external/network drives), choose all media/images/videos, and set exclusions. Analysis only reads media.
+1. In **Scanner**, add one or more folders (including mounted external/network drives), choose Similar photos, videos & animations (default), or an exact-only all-media/image/video mode, and set exclusions. Similar sensitivity can be strict, balanced, or broad. Analysis only reads media.
 2. Pause, cancel, or resume the current scan. Progress uses SSE, with polling reconnection. History and unchanged-file hash/metadata caches survive restart.
-3. In **Duplicate review**, choose a scan and inspect side-by-side previews and SHA-256 evidence. “Keep” is checked for the likely original when exactly one filename lacks copy markers. Ambiguous groups keep every file until you select manually. All protected files remain checked.
+3. In **Duplicate review**, choose a scan and inspect side-by-side previews and SHA-256, photo-hash or time-spaced frame evidence. Play video with sound before deciding what to remove. Every similar-media group starts with all files kept; uncheck unwanted versions manually. A file can appear in both an exact group and a similar group. “Keep” is checked for the likely original when exactly one filename lacks copy markers. Ambiguous groups keep every file until you select manually. All protected files remain checked.
 4. Uncheck unwanted files in a group and choose **Preview cleanup**. This creates a dry run for the unchecked files **on the current member page**. Large groups are paginated, 50 members per page.
 5. Choose OS Trash/Recycle Bin (default) or same-volume quarantine. Review the source paths, retained copies and size, check the explicit confirmation box, then confirm cleanup. No permanent deletion endpoint exists. Trash failure never silently falls back to quarantine or deletion.
 6. **Cleanup** keeps results and recovery records. Restore quarantine here; restore Trash items through the operating system. Quarantine restore refuses to overwrite an occupied original path. Rescan restored files to include them in a new inventory.
 
-Cleanup is conservative: files and retained copies must still match their recorded device, inode, size, modification and change timestamps. Both contents are freshly SHA-256 verified before execution, with checks repeated before each move. RAW originals, configured protected directories, and potential same-stem photo/video companions are blocked from cleanup in Phase 1. That companion rule is a safety heuristic, not verified Live Photo recognition.
+Cleanup is conservative: files and retained copies must still match their recorded device, inode, size, modification and change timestamps. Both contents are freshly SHA-256 verified against their own scan snapshots before execution, with checks repeated before each move. RAW originals, configured protected directories, and potential same-stem photo/video companions are blocked from cleanup. That companion rule is a safety heuristic, not verified Live Photo recognition.
 
 ## Validation
 
@@ -66,7 +66,7 @@ All cleanup tests use temporary synthetic media. The local browser smoke script 
 ## Layout
 
 - `backend/app/`: API, core filesystem/security, discovery, metadata, hashing, grouping, retention, cleanup, database and managed workers.
-- `backend/migrations/`: immutable initial Alembic migration, automatically applied at startup.
+- `backend/migrations/`: versioned Alembic migrations, automatically applied at startup.
 - `backend/tests/`: unit, API, persistence, worker and cleanup safety tests.
 - `frontend/src/`: real React pages, shared components, typed API client and SSE hook.
 - `scripts/`: setup, launch, verification and test tooling.
@@ -77,6 +77,6 @@ Database, API token, and rotating diagnostic logs default to platform applicatio
 
 ## Current limits and next phase
 
-Phase 1 detects binary equality across supported extensions, not visually similar images or re-encoded videos. Metadata and preview support depends on installed decoders; unsupported codecs still participate in exact matching. FFprobe/ExifTool are optional at startup but required for comprehensive video/RAW metadata. No RAW rendering, verified Live Photo pairing, embeddings, partial-video matching, scheduling, database relocation UI, or packaged Tauri runtime is presented as complete. Hardware volume identity is currently session-local device/mount identity, not a persistent cross-platform hardware UUID. Fingerprint tables reserve versioned storage for later engines.
+The app compares binary equality, photo appearance, and sampled video/animation sequences; it also decodes RAW previews with rawpy/LibRaw. Actual codec/camera support varies. Missing, corrupt or unsupported inputs retain exact-match coverage and appear in scanner warnings. Video matching does not compare audio or every frame, so manual playback review is essential. Crops, trims, partial overlap, semantic matching and audio fingerprints are not implemented. Static/low-detail clips and long or untimed animations may be omitted from approximate analysis. No verified Live Photo pairing, scheduling, packaged Tauri runtime, stable cross-platform hardware UUID or 100k-file performance guarantee is claimed. Versioned fingerprints are cached for unchanged files; normal operation is offline after setup.
 
-Next: **Phase 2**, indexed pHash/dHash image comparison with calibrated, explainable classifications and tests. See [architecture](docs/architecture.md), [algorithms](docs/algorithms.md), [API](docs/api.md), [database](docs/database.md), [security](docs/security.md), and [Phase 1 status](docs/phase-1.md).
+Next: broader corpus calibration and **Phase 4** partial/advanced similarity and audio corroboration. See [architecture](docs/architecture.md), [algorithms](docs/algorithms.md), [API](docs/api.md), [database](docs/database.md), [security](docs/security.md), and [Phase 1 status](docs/phase-1.md).

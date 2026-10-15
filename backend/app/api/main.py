@@ -26,6 +26,7 @@ from app.database.models import (
 from app.workers.manager import JobManager
 from app.cleanup.service import CleanupService
 from app.metadata.extract import tools
+from app.metadata.decoding import load_still
 
 
 def record(model):
@@ -159,7 +160,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
 
     @app.get("/api/v1/health")
     def health():
-        return {"status": "ok", "phase": 1, "tools": tools(), "cleanup": ["trash", "quarantine"]}
+        return {"status": "ok", "phase": 3, "tools": tools(), "cleanup": ["trash", "quarantine"]}
 
     @app.get("/api/v1/openapi.json")
     def schema():
@@ -280,6 +281,30 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                     raise ValueError("This scan does not support that action in its current state")
                 return record(job)
 
+    @app.get("/api/v1/scans/{scan_id}/warnings")
+    def scan_warnings(scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
+        get_scan(scan_id)
+        with sessions() as session:
+            query = (
+                select(File, MediaMetadata)
+                .outerjoin(MediaMetadata, MediaMetadata.file_id == File.id)
+                .where(File.scan_id == scan_id, (File.error.is_not(None)) | (MediaMetadata.warnings != []))
+            )
+            items = [
+                {
+                    "id": file.id,
+                    "name": file.name,
+                    "path": file.path,
+                    "warnings": ([file.error] if file.error else [])
+                    + (metadata.warnings if metadata else []),
+                }
+                for file, metadata in session.execute(query.order_by(File.path).offset(offset).limit(limit))
+            ]
+            return {
+                "items": items,
+                "total": session.scalar(select(func.count()).select_from(query.subquery())),
+            }
+
     @app.get("/api/v1/scans/{scan_id}/events")
     async def events(scan_id: str, request: Request):
         get_scan(scan_id)
@@ -351,16 +376,15 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             if identity(path) != stored_identity(file):
                 raise HTTPException(409, "Media changed since scanning")
             if file.media_type == "image":
-                from PIL import Image, ImageOps
                 from io import BytesIO
 
                 try:
-                    with Image.open(path) as image:
-                        image.draft("RGB", (1600, 1600))
-                        image.thumbnail((1600, 1600))
-                        image = ImageOps.exif_transpose(image)
-                        output = BytesIO()
-                        image.convert("RGB").save(output, "JPEG", quality=85)
+                    metadata = session.get(MediaMetadata, file_id)
+                    if metadata and metadata.fields.get("animated"):
+                        return FileResponse(path, media_type=file.mime_type)
+                    image = load_still(path)
+                    output = BytesIO()
+                    image.save(output, "JPEG", quality=85)
                     return StreamingResponse(iter([output.getvalue()]), media_type="image/jpeg")
                 except Exception:
                     raise HTTPException(415, "Image preview unavailable; exact comparison still works")
@@ -436,7 +460,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     @app.post("/api/v1/cleanup/plan", status_code=201)
     def plan(value: PlanRequest):
         with manager.lock:
-            return record(cleanup.plan(value.file_ids, value.destination))
+            return record(cleanup.plan(value.file_ids, value.destination, value.group_id))
 
     @app.post("/api/v1/cleanup/execute")
     def execute(value: ExecuteRequest):
@@ -471,7 +495,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
         with sessions() as session:
             latest = session.scalar(select(ScanJob).order_by(ScanJob.created_at.desc()).limit(1))
             if not latest:
-                return {"files": 0, "bytes": 0, "groups": 0, "recoverable": 0}
+                return {"files": 0, "bytes": 0, "groups": 0, "similar_groups": 0, "recoverable": 0}
             query = select(File).where(File.scan_id == latest.id, File.status.in_(["ready", "discovered"]))
             return {
                 "scan_id": latest.id,
@@ -484,11 +508,26 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "groups": session.scalar(
                     select(func.count())
                     .select_from(DuplicateGroup)
-                    .where(DuplicateGroup.scan_id == latest.id, DuplicateGroup.review_status != "resolved")
+                    .where(
+                        DuplicateGroup.scan_id == latest.id,
+                        DuplicateGroup.review_status != "resolved",
+                        DuplicateGroup.classification == "EXACT_DUPLICATE",
+                    )
+                ),
+                "similar_groups": session.scalar(
+                    select(func.count())
+                    .select_from(DuplicateGroup)
+                    .where(
+                        DuplicateGroup.scan_id == latest.id,
+                        DuplicateGroup.review_status != "resolved",
+                        DuplicateGroup.classification == "SIMILAR_CONTENT",
+                    )
                 ),
                 "recoverable": session.scalar(
                     select(func.coalesce(func.sum(DuplicateGroup.recoverable), 0)).where(
-                        DuplicateGroup.scan_id == latest.id, DuplicateGroup.review_status != "resolved"
+                        DuplicateGroup.scan_id == latest.id,
+                        DuplicateGroup.review_status != "resolved",
+                        DuplicateGroup.classification == "EXACT_DUPLICATE",
                     )
                 ),
             }

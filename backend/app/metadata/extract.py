@@ -1,16 +1,21 @@
 import json
 import shutil
+import importlib.util
 import subprocess
 from pathlib import Path
 from PIL import Image, ExifTags
 from pillow_heif import register_heif_opener
 from app.core.filesystem import RAW_EXTENSIONS
+from app.core.media_tools import executable
 
 register_heif_opener()
 
 
 def tools() -> dict[str, bool]:
-    return {tool: shutil.which(tool) is not None for tool in ("ffprobe", "ffmpeg", "exiftool")}
+    return {tool: executable(tool) is not None for tool in ("ffprobe", "ffmpeg", "exiftool")} | {
+        "rawpy": importlib.util.find_spec("rawpy") is not None,
+        "pillow-heif": importlib.util.find_spec("pillow_heif") is not None,
+    }
 
 
 def extract(path: Path, media_type: str) -> tuple[dict, list[str]]:
@@ -39,12 +44,23 @@ def extract(path: Path, media_type: str) -> tuple[dict, list[str]]:
         except Exception as exc:
             warnings.append(f"Image metadata unavailable: {type(exc).__name__}")
     if media_type == "video":
-        if not shutil.which("ffprobe"):
+        if not executable("ffprobe"):
             warnings.append("FFprobe unavailable; exact hashing still works")
         else:
             try:
                 process = subprocess.run(
-                    ["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
+                    [
+                        executable("ffprobe"),
+                        "-v",
+                        "error",
+                        "-protocol_whitelist",
+                        "file,pipe",
+                        "-show_format",
+                        "-show_streams",
+                        "-of",
+                        "json",
+                        str(path),
+                    ],
                     capture_output=True,
                     timeout=30,
                     check=True,
@@ -78,5 +94,13 @@ def extract(path: Path, media_type: str) -> tuple[dict, list[str]]:
         except (OSError, ValueError, IndexError, subprocess.SubprocessError):
             warnings.append("ExifTool metadata unavailable")
     elif path.suffix.lower() in RAW_EXTENSIONS:
-        warnings.append("RAW decoding is deferred; install ExifTool for embedded metadata")
+        try:
+            import rawpy
+
+            with rawpy.imread(str(path)) as raw:
+                fields.update(
+                    width=raw.sizes.width, height=raw.sizes.height, orientation=raw.sizes.flip, format="RAW"
+                )
+        except Exception as exc:
+            warnings.append(f"RAW metadata unavailable: {type(exc).__name__}")
     return fields, warnings
