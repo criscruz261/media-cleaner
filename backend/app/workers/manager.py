@@ -27,6 +27,7 @@ class JobManager:
         self.active = None
         self.activity_lock = threading.Lock()
         self.activities = {}
+        self.matcher_dirty = False
         with sessions.begin() as session:
             for job in session.scalars(select(ScanJob).where(ScanJob.status.in_(["running", "queued"]))):
                 job.status = "interrupted"
@@ -69,11 +70,15 @@ class JobManager:
                 job.processed = session.scalar(
                     select(func.count())
                     .select_from(File)
-                    .where(File.scan_id == scan_id, File.status.in_(["ready", "error"]))
+                    .where(
+                        File.scan_id == scan_id,
+                        File.status.in_(["ready", "error", "trashed", "quarantined", "restored"]),
+                    )
                 )
                 job.bytes_processed = session.scalar(
                     select(func.coalesce(func.sum(File.size), 0)).where(
-                        File.scan_id == scan_id, File.status == "ready"
+                        File.scan_id == scan_id,
+                        File.status.in_(["ready", "trashed", "quarantined", "restored"]),
                     )
                 )
 
@@ -154,7 +159,36 @@ class JobManager:
                     raise ValueError("A scan root is unavailable or changed; history was retained") from exc
             with self.sessions.begin() as session:
                 session.get(ScanJob, scan_id).stage = "metadata_and_hashing"
-            matcher = LiveMatcher(self.sessions, scan_id, options, checkpoint)
+            with self.lock:
+                matcher = LiveMatcher(self.sessions, scan_id, options, checkpoint)
+                self.matcher_dirty = False
+
+            def publish(file_id=None):
+                nonlocal matcher
+                with self.lock:
+                    if self.matcher_dirty:
+                        matcher.close()
+                        matcher = LiveMatcher(self.sessions, scan_id, options, checkpoint)
+                        last_ready = ""
+                        while True:
+                            with self.sessions() as session:
+                                ready_ids = session.scalars(
+                                    select(File.id)
+                                    .where(
+                                        File.scan_id == scan_id, File.status == "ready", File.id > last_ready
+                                    )
+                                    .order_by(File.id)
+                                    .limit(128)
+                                ).all()
+                            if not ready_ids:
+                                break
+                            for ready_id in ready_ids:
+                                matcher.add(ready_id)
+                            last_ready = ready_ids[-1]
+                        self.matcher_dirty = False
+                    if file_id is not None:
+                        matcher.add(file_id)
+
             # Process every file's metadata, hash only size candidates. The queue is bounded.
             with ThreadPoolExecutor(max_workers=options["concurrency"], thread_name_prefix="media") as pool:
                 pending = set()
@@ -177,12 +211,12 @@ class JobManager:
                         if len(pending) >= options["concurrency"] * 2:
                             done, pending = wait(pending, return_when=FIRST_COMPLETED)
                             for future in done:
-                                matcher.add(future.result())
+                                publish(future.result())
                     del page
                 while pending:
                     done, pending = wait(pending, return_when=FIRST_COMPLETED)
                     for future in done:
-                        matcher.add(future.result())
+                        publish(future.result())
             checkpoint()
             for root_text in options["roots"]:
                 try:
@@ -202,7 +236,8 @@ class JobManager:
                         )
                         saved_root.available = False
                     raise ValueError("Root disconnected or changed; history retained")
-            with self.sessions() as session:
+            with self.lock, self.sessions() as session:
+                publish()
                 job = session.get(ScanJob, scan_id)
                 job.stage = "grouping"
                 session.commit()
@@ -231,6 +266,8 @@ class JobManager:
         checkpoint()
         with self.sessions() as session:
             file = session.get(File, file_id)
+            if file.status not in {"discovered", "ready", "error"}:
+                return file_id
             path, expected = Path(file.path), stored_identity(file)
             candidate = (
                 session.scalar(
@@ -336,8 +373,10 @@ class JobManager:
                         warnings = list(warnings) + [warning]
             if identity(path) != expected:
                 raise ValueError("File changed while processing")
-            with self.sessions.begin() as session:
+            with self.lock, self.sessions.begin() as session:
                 file = session.get(File, file_id)
+                if file.status not in {"discovered", "ready", "error"}:
+                    return file_id
                 file.sha256, file.status, file.error = digest, "ready", None
                 if descriptor is not None:
                     saved = session.scalar(
@@ -384,8 +423,10 @@ class JobManager:
         except ScanStopped:
             raise
         except Exception as exc:
-            with self.sessions.begin() as session:
+            with self.lock, self.sessions.begin() as session:
                 file = session.get(File, file_id)
+                if file.status not in {"discovered", "ready", "error"}:
+                    return file_id
                 file.status, file.error, file.sha256 = "error", str(exc), None
                 job = session.get(ScanJob, scan_id)
                 job.errors += 1

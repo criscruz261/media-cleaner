@@ -1,13 +1,11 @@
 import { GroupCard } from "../pages/Review";
 import type { Cleanup } from "../types/api";
-import { VideoCompare } from "./VideoCompare";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers3, ShieldCheck, ArrowRight } from "lucide-react";
-import { api, bytes } from "../services/api";
-import type { Group, Page, MediaFile } from "../types/api";
+import { api } from "../services/api";
+import type { Group, Page } from "../types/api";
 import { ErrorMessage, Pagination } from "./ui";
-import { MediaPreview } from "./MediaPreview";
 type Matches = Page<Group> & {
   exact_groups: number;
   similar_groups: number;
@@ -54,23 +52,27 @@ export function LiveMatches({
         <div className="notice">
           <ShieldCheck size={18} />
           <p>
-            These results are provisional and can grow as scanning continues.
-            Review selections and cleanup become available when the scan
-            finishes.
+            Matches can grow as scanning continues. Select unwanted files and
+            delete per group now or after the scan finishes. Every cleanup
+            requires a preview and confirmation.
           </p>
         </div>
       )}
       {matches.data?.items.length ? (
         matches.data.items.map((group) =>
-          status === "completed" && onPlan ? (
+          onPlan ? (
             <GroupCard
               key={group.id}
               group={group}
               onPlan={onPlan}
               thumbnailFirst
+              selectForDeletion
+              live={running}
             />
           ) : (
-            <LiveMatch key={group.id} group={group} running={running} />
+            <button key={group.id} onClick={() => navigate("Review")}>
+              Select and delete files in this group
+            </button>
           ),
         )
       ) : (
@@ -93,57 +95,5 @@ export function LiveMatches({
         </button>
       )}
     </section>
-  );
-}
-function LiveMatch({ group, running }: { group: Group; running: boolean }) {
-  const detail = useQuery({
-    queryKey: ["scanner-match", group.id],
-    queryFn: () =>
-      api<Group & { files: MediaFile[] }>(`/groups/${group.id}?limit=3`),
-    refetchInterval: running ? 1000 : false,
-  });
-  const kind =
-    group.classification === "EXACT_DUPLICATE"
-      ? "Exact copies"
-      : group.evidence.media_kind === "sequence"
-        ? "Similar videos / animations"
-        : "Similar photos";
-  return (
-    <article className="live-match">
-      <div className="section-heading">
-        <h3>
-          {kind} · {group.member_count} files
-        </h3>
-        <span className="badge">
-          {group.classification === "EXACT_DUPLICATE"
-            ? "SHA-256 verified"
-            : "Manual review required"}
-        </span>
-      </div>
-      {detail.data?.files.some((file) => file.media_type === "video") && (
-        <VideoCompare groupId={group.id} />
-      )}
-      <div className="media-grid">
-        {detail.data?.files.map((file) => (
-          <div className="media-card" key={file.id}>
-            <MediaPreview file={file} thumbnailFirst />
-            <strong className="filename">{file.name}</strong>
-            <p className="file-path">{file.path}</p>
-            <span className="muted">{bytes(file.size)}</span>
-            <label className="checkbox-label">
-              <input type="checkbox" checked={file.keep} disabled readOnly />{" "}
-              Keep this file · available after scan completes
-            </label>
-          </div>
-        ))}
-      </div>
-      {group.member_count > 3 && (
-        <p className="hint">
-          Showing 3 of {group.member_count} files. All members are available in
-          Duplicate review after scanning.
-        </p>
-      )}
-      <ErrorMessage error={detail.error} />
-    </article>
   );
 }

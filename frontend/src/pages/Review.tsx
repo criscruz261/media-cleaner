@@ -99,10 +99,14 @@ export function GroupCard({
   group,
   onPlan,
   thumbnailFirst = false,
+  selectForDeletion = false,
+  live = false,
 }: {
   group: Group;
   onPlan: (plan: Cleanup) => void;
   thumbnailFirst?: boolean;
+  selectForDeletion?: boolean;
+  live?: boolean;
 }) {
   const [offset, setOffset] = useState(0),
     [destination, setDestination] = useState<"trash" | "quarantine">("trash");
@@ -116,6 +120,7 @@ export function GroupCard({
   }, [preferences.data?.cleanup_destination]);
   const detail = useQuery({
     queryKey: ["group", group.id, offset],
+    refetchInterval: live ? 1000 : false,
     queryFn: () =>
       api<Group & { files: NonNullable<Group["files"]> }>(
         `/groups/${group.id}?offset=${offset}&limit=50`,
@@ -224,17 +229,23 @@ export function GroupCard({
               <label className="checkbox-label">
                 <input
                   type="checkbox"
-                  checked={file.keep}
+                  checked={selectForDeletion ? !file.keep : file.keep}
                   disabled={
                     review.isPending ||
                     !!file.protected_reason ||
                     file.status !== "ready"
                   }
                   onChange={(e) =>
-                    review.mutate({ id: file.id, keep: e.target.checked })
+                    review.mutate({
+                      id: file.id,
+                      keep: selectForDeletion
+                        ? !e.target.checked
+                        : e.target.checked,
+                    })
                   }
                 />
-                <Check size={14} /> Keep this file
+                <Check size={14} />{" "}
+                {selectForDeletion ? "Select for deletion" : "Keep this file"}
               </label>
               <MediaPreview file={file} thumbnailFirst={thumbnailFirst} />
               <strong className="filename">{file.name}</strong>
@@ -276,8 +287,10 @@ export function GroupCard({
         onChange={setOffset}
       />
       <p className="hint">
-        Check the files to keep. Uncheck unwanted files, then preview deletion
-        for this group. You must confirm before anything is moved.
+        {selectForDeletion
+          ? "Select the unwanted files, then click Delete selected for this group. Unselected files are kept."
+          : "Check the files to keep. Uncheck unwanted files, then preview deletion for this group."}{" "}
+        You must confirm before anything is moved.
       </p>
       <div className="group-actions">
         <div>
@@ -298,8 +311,8 @@ export function GroupCard({
           disabled={!eligible.length || plan.isPending || review.isPending}
           onClick={() => plan.mutate()}
         >
-          Delete unchecked · {eligible.length} on this page{" "}
-          <ArrowRight size={15} />
+          {selectForDeletion ? "Delete selected" : "Delete unchecked"} ·{" "}
+          {eligible.length} on this page <ArrowRight size={15} />
         </button>
       </div>
       <ErrorMessage error={detail.error || review.error || plan.error} />

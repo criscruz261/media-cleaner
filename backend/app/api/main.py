@@ -14,6 +14,7 @@ from app.core.filesystem import identity, stored_identity
 from app.core.logging import configure
 from app.database.session import open_database
 from app.database.models import (
+    FileReviewChoice,
     ScanJob,
     Volume,
     File,
@@ -506,10 +507,6 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             group = session.get(DuplicateGroup, group_id)
             if not group:
                 raise HTTPException(404, "Group not found")
-            if session.get(ScanJob, group.scan_id).status != "completed":
-                raise ValueError(
-                    "Live results are provisional. Wait for the scan to finish before reviewing or cleaning up."
-                )
             members = session.scalars(select(GroupMember).where(GroupMember.group_id == group_id)).all()
             ids = {member.file_id for member in members}
             keep_ids = (
@@ -528,6 +525,15 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 if file.protected_reason and member.file_id not in keep_ids:
                     raise ValueError("Protected assets must remain selected")
                 member.keep = member.file_id in keep_ids
+                choice = session.get(FileReviewChoice, (member.file_id, group.classification))
+                if choice:
+                    choice.keep = member.keep
+                else:
+                    session.add(
+                        FileReviewChoice(
+                            file_id=member.file_id, classification=group.classification, keep=member.keep
+                        )
+                    )
             group.review_status = "reviewed"
         return {"saved": True}
 
@@ -539,7 +545,9 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     @app.post("/api/v1/cleanup/execute")
     def execute(value: ExecuteRequest):
         with manager.lock:
-            return record(cleanup.execute(value.plan_id, value.token, value.confirmed))
+            result = cleanup.execute(value.plan_id, value.token, value.confirmed)
+            manager.matcher_dirty = True
+            return record(result)
 
     @app.get("/api/v1/cleanup/history")
     def cleanup_history(offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):

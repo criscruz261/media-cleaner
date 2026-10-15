@@ -21,21 +21,15 @@ try {
   await page.getByLabel("Folder paths · one per line").fill(fixture.media);
   await page.getByRole("button", { name: "Start scan", exact: true }).click();
   if (fixture.live) {
-    await page
-      .getByRole("heading", { name: /Exact copies · 2 files/ })
-      .waitFor();
+    await page.getByRole("heading", { name: /2 exact copies/ }).waitFor();
     if (fixture.similar)
-      await page
-        .getByRole("heading", { name: /Similar photos · 3 files/ })
-        .waitFor();
+      await page.getByRole("heading", { name: /3 similar photos/ }).waitFor();
     const saved = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("media-cleaner.workspace.v1")),
     );
     if (!saved.scanId) throw new Error("Scan selection was not saved");
     await page.reload();
-    await page
-      .getByRole("heading", { name: /Exact copies · 2 files/ })
-      .waitFor();
+    await page.getByRole("heading", { name: /2 exact copies/ }).waitFor();
     const restored = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("media-cleaner.workspace.v1")),
     );
@@ -43,9 +37,7 @@ try {
       throw new Error("Refresh replaced the active scan");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page
-      .getByRole("heading", { name: /Exact copies · 2 files/ })
-      .waitFor();
+    await page.getByRole("heading", { name: /2 exact copies/ }).waitFor();
     const recovered = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("media-cleaner.workspace.v1")),
     );
@@ -56,6 +48,40 @@ try {
       path: fixture.artifacts + "/live-scanner.png",
       fullPage: true,
     });
+    const liveGroup = page
+      .locator(".group-card")
+      .filter({ has: page.getByRole("heading", { name: "2 exact copies" }) });
+    await liveGroup
+      .locator(".media-card")
+      .filter({
+        has: page.locator(".filename", { hasText: "IMG_0971 copy.png" }),
+      })
+      .getByRole("checkbox")
+      .click();
+    await liveGroup.locator(".group-actions select").selectOption("quarantine");
+    await liveGroup
+      .getByRole("button", { name: /Delete selected · 1/ })
+      .click();
+    await page
+      .getByRole("heading", { name: "Dry-run cleanup preview" })
+      .waitFor();
+    if (
+      !(await page
+        .getByRole("button", { name: "Confirm cleanup" })
+        .isDisabled())
+    )
+      throw new Error("Live cleanup bypassed confirmation");
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Confirm cleanup" }).click();
+    await page
+      .getByRole("heading", { name: "Nothing queued for cleanup" })
+      .waitFor();
+    const state = await page.request.get(
+      `http://127.0.0.1:${fixture.port}/api/v1/scans/${saved.scanId}`,
+    );
+    if ((await state.json()).status !== "running")
+      throw new Error("Live cleanup stopped the scan");
+    await page.getByRole("button", { name: "Scanner", exact: true }).click();
     await writeFile(fixture.release, "go");
   }
   await page.getByText("complete", { exact: true }).waitFor({ timeout: 30000 });
@@ -69,7 +95,7 @@ try {
   await page
     .locator(".group-card")
     .first()
-    .getByRole("button", { name: /Delete unchecked/ })
+    .getByRole("button", { name: /Delete selected/ })
     .waitFor();
   await page.getByRole("button", { name: "Review matches" }).click();
   const group = fixture.video
@@ -80,14 +106,16 @@ try {
       })
     : fixture.similar
       ? page.locator(".group-card").filter({
-          has: page.getByRole("heading", { name: "3 similar photos" }),
+          has: page.getByRole("heading", {
+            name: fixture.live ? "2 similar photos" : "3 similar photos",
+          }),
         })
       : page.locator(".group-card").filter({
           has: page.getByRole("heading", { name: "2 exact copies" }),
         });
   await group.waitFor();
   const boxes = group.getByRole("checkbox");
-  if ((await boxes.count()) !== (fixture.similar ? 3 : 2))
+  if ((await boxes.count()) !== (fixture.similar && !fixture.live ? 3 : 2))
     throw new Error("Missing review checkboxes");
   if (fixture.video) {
     for (const box of await boxes.all())

@@ -1,3 +1,4 @@
+import pytest
 import threading
 from conftest import duplicate_group, scan
 from app.hashing.sha256 import hash_file as real_hash
@@ -89,7 +90,10 @@ def test_startup_marks_interrupted_jobs_and_cleanup(tmp_path):
         assert client.get("/api/v1/cleanup/history").json()["items"][0]["status"] == "interrupted"
 
 
-def test_live_matches_survive_reconnect_and_resume_skips_checkpoints(client, workspace, monkeypatch):
+@pytest.mark.parametrize("resume_after_cleanup", [False, True])
+def test_live_matches_survive_reconnect_and_resume_skips_checkpoints(
+    client, workspace, monkeypatch, resume_after_cleanup
+):
     import time
     from app.database.models import File
     from sqlalchemy import select
@@ -98,7 +102,7 @@ def test_live_matches_survive_reconnect_and_resume_skips_checkpoints(client, wor
     image = sample(workspace / "original.png")
     (workspace / "copy.png").write_bytes((workspace / "original.png").read_bytes())
     image.resize((120, 80)).save(workspace / "resized.jpg", quality=90)
-    (workspace / "waiting.MOV").write_bytes(b"waiting")
+    (workspace / "waiting.png").write_bytes((workspace / "original.png").read_bytes())
     manager = client.app.state.manager
     original = manager.process_file
     release = threading.Event()
@@ -111,7 +115,7 @@ def test_live_matches_survive_reconnect_and_resume_skips_checkpoints(client, wor
     def controlled(scan_id, file_id, checkpoint):
         with manager.sessions() as session:
             name = session.get(File, file_id).name
-        if name == "waiting.MOV":
+        if name == "waiting.png":
             while not release.wait(0.01):
                 checkpoint()
         return original(scan_id, file_id, checkpoint)
@@ -133,8 +137,38 @@ def test_live_matches_survive_reconnect_and_resume_skips_checkpoints(client, wor
         else:
             raise AssertionError(matches)
         assert matches["provisional"]
-        group_id = matches["items"][0]["id"]
-        assert client.post(f"/api/v1/groups/{group_id}/review", json={"changes": {}}).status_code == 400
+        exact = next(group for group in matches["items"] if group["classification"] == "EXACT_DUPLICATE")
+        similar = next(group for group in matches["items"] if group["classification"] == "SIMILAR_CONTENT")
+        members = client.get(f"/api/v1/groups/{exact['id']}").json()["files"]
+        unwanted = next(file for file in members if file["name"] == "copy.png")
+        similar_members = client.get(f"/api/v1/groups/{similar['id']}").json()["files"]
+        resized = next(file for file in similar_members if file["name"] == "resized.jpg")
+        assert (
+            client.post(
+                f"/api/v1/groups/{similar['id']}/review", json={"changes": {resized["id"]: False}}
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                f"/api/v1/groups/{exact['id']}/review", json={"changes": {unwanted["id"]: False}}
+            ).status_code
+            == 200
+        )
+        preview = client.post(
+            "/api/v1/cleanup/plan",
+            json={"file_ids": [unwanted["id"]], "group_id": exact["id"], "destination": "quarantine"},
+        )
+        assert preview.status_code == 201, preview.text
+        plan = preview.json()
+        payload = {"plan_id": plan["id"], "token": plan["token"], "confirmed": False}
+        assert client.post("/api/v1/cleanup/execute", json=payload).status_code == 400
+        assert (workspace / "copy.png").exists()
+        payload["confirmed"] = True
+        outcome = client.post("/api/v1/cleanup/execute", json=payload)
+        assert outcome.status_code == 200, outcome.text
+        assert outcome.json()["status"] == "completed"
+        assert not (workspace / "copy.png").exists()
         job = client.get(f"/api/v1/scans/{scan_id}").json()
         assert job["status"] == "running"
         assert job["processed"] == 3
@@ -142,20 +176,31 @@ def test_live_matches_survive_reconnect_and_resume_skips_checkpoints(client, wor
         assert job["checkpoint_at"]
         assert client.get("/api/v1/scans/active").json()["scan"]["id"] == scan_id
         assert client.get("/api/v1/scans").json()["total"] == 1
-        assert client.post(f"/api/v1/scans/{scan_id}/pause").status_code == 200
-        wait_worker(client)
+        if resume_after_cleanup:
+            assert client.post(f"/api/v1/scans/{scan_id}/pause").status_code == 200
+            wait_worker(client)
         before = list(hashed)
         assert len(before) == 3
         release.set()
-        assert client.post(f"/api/v1/scans/{scan_id}/resume").status_code == 200
+        if resume_after_cleanup:
+            assert client.post(f"/api/v1/scans/{scan_id}/resume").status_code == 200
         wait_worker(client)
         job = client.get(f"/api/v1/scans/{scan_id}").json()
         assert job["status"] == "completed", job
         assert job["processed"] == 4
         assert job["bytes_processed"] == job["total_bytes"]
-        assert sorted(hashed) == sorted(before + ["waiting.MOV"])
+        assert sorted(hashed) == sorted(before + ["waiting.png"])
         assert not client.get(f"/api/v1/scans/{scan_id}/matches").json()["provisional"]
         assert client.get("/api/v1/scans/active").json()["scan"] is None
+        final = client.get(f"/api/v1/scans/{scan_id}/matches").json()
+        assert final["exact_groups"] == 1
+        assert final["similar_groups"] == 1
+        for group in final["items"]:
+            files = client.get(f"/api/v1/groups/{group['id']}").json()["files"]
+            assert all(file["name"] != "copy.png" for file in files)
+            assert next(file for file in files if file["name"] == "waiting.png")["keep"]
+            if group["classification"] == "SIMILAR_CONTENT":
+                assert not next(file for file in files if file["name"] == "resized.jpg")["keep"]
         with manager.sessions() as session:
             assert len(session.scalars(select(File).where(File.scan_id == scan_id)).all()) == 4
     finally:
@@ -170,7 +215,19 @@ def test_backend_restart_reuses_durable_completed_file_checkpoints(client, works
     (workspace / "copy.png").write_bytes((workspace / "original.png").read_bytes())
     job = scan(client, [workspace], mode="similar")
     assert job["status"] == "completed"
+    from sqlalchemy import text
+
+    group = client.get(f"/api/v1/scans/{job['id']}/matches").json()["items"][0]
+    files = client.get(f"/api/v1/groups/{group['id']}").json()["files"]
+    copy_id = next(file["id"] for file in files if file["name"] == "copy.png")
+    assert (
+        client.post(f"/api/v1/groups/{group['id']}/review", json={"changes": {copy_id: False}}).status_code
+        == 200
+    )
     with client.app.state.sessions.begin() as session:
+        # Model an existing 0003 database: migration must import reviewed group choices.
+        session.execute(text("DROP TABLE file_review_choices"))
+        session.execute(text("UPDATE alembic_version SET version_num='0003'"))
         session.get(ScanJob, job["id"]).status = "running"
         database_path = session.bind.url.database
     from pathlib import Path
@@ -198,3 +255,46 @@ def test_backend_restart_reuses_durable_completed_file_checkpoints(client, works
         assert state["processed"] == 2
         assert state["errors"] == 0
         assert state["bytes_processed"] == job["bytes_processed"]
+        group = recovered.get(f"/api/v1/scans/{job['id']}/matches").json()["items"][0]
+        files = recovered.get(f"/api/v1/groups/{group['id']}").json()["files"]
+        assert not next(file for file in files if file["id"] == copy_id)["keep"]
+
+
+def test_rebuilt_groups_restore_late_members_without_overwriting_new_choices(client, workspace):
+    from app.grouping.live import LiveMatcher
+
+    for name in ["a.MOV", "b.MOV", "c.MOV", "d.MOV"]:
+        (workspace / name).write_bytes(b"same video")
+    job = scan(client, [workspace])
+    group = client.get(f"/api/v1/scans/{job['id']}/matches").json()["items"][0]
+    files = client.get(f"/api/v1/groups/{group['id']}").json()["files"]
+    ids = {file["name"]: file["id"] for file in files}
+    assert (
+        client.post(
+            f"/api/v1/groups/{group['id']}/review", json={"changes": {ids["c.MOV"]: False}}
+        ).status_code
+        == 200
+    )
+    matcher = LiveMatcher(client.app.state.sessions, job["id"], {"mode": "exact"}, lambda: None)
+    try:
+        matcher.add(ids["a.MOV"])
+        matcher.add(ids["b.MOV"])
+        rebuilt = client.get(f"/api/v1/scans/{job['id']}/matches").json()["items"][0]
+        assert (
+            client.post(
+                f"/api/v1/groups/{rebuilt['id']}/review", json={"changes": {ids["a.MOV"]: False}}
+            ).status_code
+            == 200
+        )
+        matcher.add(ids["c.MOV"])
+        matcher.add(ids["d.MOV"])
+        matcher.finish()
+        files = client.get(f"/api/v1/groups/{rebuilt['id']}").json()["files"]
+        assert {file["name"]: file["keep"] for file in files} == {
+            "a.MOV": False,
+            "b.MOV": True,
+            "c.MOV": False,
+            "d.MOV": True,
+        }
+    finally:
+        matcher.close()

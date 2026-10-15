@@ -1,7 +1,16 @@
 """Single-coordinator incremental match publication; all records persist in SQLite."""
 
 from sqlalchemy import select, delete
-from app.database.models import File, DuplicateGroup, GroupMember, Fingerprint, ScanJob, SimilarityMatch, now
+from app.database.models import (
+    File,
+    DuplicateGroup,
+    GroupMember,
+    Fingerprint,
+    ScanJob,
+    SimilarityMatch,
+    FileReviewChoice,
+    now,
+)
 from app.retention.recommend import recommendation
 from app.similarity.images import image_matcher, ALGORITHM, VERSION
 from app.similarity.temporal import ALGORITHM as TEMPORAL, VERSION as TEMPORAL_VERSION
@@ -14,8 +23,15 @@ class LiveMatcher:
         self.scan_id = scan_id
         self.checkpoint = checkpoint
         self.exact = {}
+        self.restored_members = set()
         self.seen = set()
-        # Resume rebuilds provisional indexes from validated file checkpoints. No review is allowed yet.
+        # Keep explicit choices across resume and index rebuilds after live cleanup.
+        self.saved_choices = {
+            (choice.file_id, choice.classification): choice.keep
+            for choice in self.session.scalars(
+                select(FileReviewChoice).join(File).where(File.scan_id == scan_id)
+            )
+        }
         groups = select(DuplicateGroup.id).where(DuplicateGroup.scan_id == scan_id)
         self.session.execute(delete(GroupMember).where(GroupMember.group_id.in_(groups)))
         self.session.execute(delete(DuplicateGroup).where(DuplicateGroup.scan_id == scan_id))
@@ -34,6 +50,7 @@ class LiveMatcher:
 
     def add(self, file_id):
         self.checkpoint()
+        self.session.expire_all()
         if file_id in self.seen:
             return
         self.seen.add(file_id)
@@ -83,7 +100,29 @@ class LiveMatcher:
             else:
                 self.session.commit()
 
+        # Reapply persisted choices to rebuilt groups; newly discovered files stay kept.
+        for group in self.session.scalars(
+            select(DuplicateGroup)
+            .join(GroupMember)
+            .where(GroupMember.file_id == file_id, DuplicateGroup.scan_id == self.scan_id)
+        ).all():
+            if not self.saved_choices:
+                continue
+            restored = False
+            for member in self.session.scalars(select(GroupMember).where(GroupMember.group_id == group.id)):
+                key = (member.file_id, group.classification)
+                if key in self.saved_choices:
+                    restore_key = (group.id, member.file_id)
+                    if restore_key not in self.restored_members:
+                        member.keep = self.saved_choices[key]
+                        self.restored_members.add(restore_key)
+                    restored = True
+            if restored and group.review_status != "pending":
+                group.review_status = "reviewed"
+        self.session.commit()
+
     def finish(self):
+        self.session.expire_all()
         for matcher in self.matchers.values():
             try:
                 matcher.send(None)
@@ -95,13 +134,17 @@ class LiveMatcher:
             if not cluster["group"]:
                 continue
             group = self.session.get(DuplicateGroup, cluster["group"])
+            self.session.refresh(group)
             query = (
                 select(File)
                 .join(GroupMember, GroupMember.file_id == File.id)
-                .where(GroupMember.group_id == group.id)
+                .where(GroupMember.group_id == group.id, File.status == "ready")
             )
             keeper, reason = recommendation(self.session.scalars(query.execution_options(yield_per=128)))
             group.recommended_id, group.recommendation = keeper, reason
+            if group.review_status == "reviewed":
+                self.session.commit()
+                continue
             members = self.session.scalars(select(GroupMember).where(GroupMember.group_id == group.id))
             for member in members:
                 file = self.session.get(File, member.file_id)

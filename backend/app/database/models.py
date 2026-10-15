@@ -155,3 +155,10 @@ class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(primary_key=True)
     value: Mapped[dict] = mapped_column(JSON)
+
+
+class FileReviewChoice(Base):
+    __tablename__ = "file_review_choices"
+    file_id: Mapped[str] = mapped_column(ForeignKey("files.id"), primary_key=True)
+    classification: Mapped[str] = mapped_column(primary_key=True)
+    keep: Mapped[bool]

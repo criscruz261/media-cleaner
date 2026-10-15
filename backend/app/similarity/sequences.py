@@ -120,7 +120,10 @@ def sequence_matcher(session, scan_id, sensitivity, checkpoint):
         live_group.member_count = target.count
         live_group.recoverable = target.total - target.largest
         live_group.updated_at = now()
-        live_group.review_status = "unreviewed" if target.count > 1 and len(target.digests) > 1 else "pending"
+        if target.count < 2 or len(target.digests) < 2:
+            live_group.review_status = "pending"
+        elif live_group.review_status != "reviewed":
+            live_group.review_status = "unreviewed"
         live_group.evidence = {
             "algorithm": ALGORITHM,
             "version": VERSION,

@@ -1,6 +1,6 @@
 # Database
 
-SQLite runs with `journal_mode=WAL`, foreign keys ON, and a 30-second busy timeout. Startup upgrades through Alembic revision `0003`; revision `0001` creates the initial schema and `0002` adds the image-fingerprint cache-key index; `0003` adds persistent scan byte totals and group update timestamps, backfilling existing history. The migration explicitly declares columns, indexes and constraints; it does not import mutable application metadata. Later schema changes require a new revision. Back up a stopped database and its WAL safely before upgrades; do not move an active WAL database onto network storage.
+SQLite runs with `journal_mode=WAL`, foreign keys ON, and a 30-second busy timeout. Startup upgrades through Alembic revision `0004`; revision `0001` creates the initial schema and `0002` adds the image-fingerprint cache-key index; `0003` adds persistent scan byte totals and group update timestamps, backfilling existing history; `0004` persists per-file review choices independently of live groups and imports existing reviewed choices. The migration explicitly declares columns, indexes and constraints; it does not import mutable application metadata. Later schema changes require a new revision. Back up a stopped database and its WAL safely before upgrades; do not move an active WAL database onto network storage.
 
 | Table | Role |
 | --- | --- |
@@ -13,7 +13,8 @@ SQLite runs with `journal_mode=WAL`, foreign keys ON, and a 30-second busy timeo
 | fingerprints | Versioned still/RAW and video/animation descriptors with indexed identity cache keys |
 | similarity_matches | Representative image-pair evidence and approximate classifications |
 | duplicate_groups | Exact classification, evidence, recommendation and review state |
-| group_members | Saved per-file keep choices |
+| group_members | Current group membership and keep choices |
+| file_review_choices | Durable explicit per-file/classification choices across live regrouping |
 | cleanup_operations | Expiring dry-run plans, per-item intent, outcomes and recovery paths |
 | settings | Validated application preferences |
 

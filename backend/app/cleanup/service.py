@@ -22,15 +22,14 @@ class CleanupService:
     def validate(self, session, ids: list[str], rehash: bool, group_id: str | None = None) -> list[dict]:
         if not ids or len(ids) != len(set(ids)):
             raise ValueError("Choose one or more distinct files")
-        if session.scalar(select(ScanJob.id).where(ScanJob.status.in_(["running", "queued"]))):
-            raise ValueError("Pause or finish active scans before cleanup")
+        active_id = session.scalar(select(ScanJob.id).where(ScanJob.status.in_(["running", "queued"])))
         items = []
         for file_id in ids:
             file = session.get(File, file_id)
             if not file or file.status != "ready" or not file.sha256:
                 raise ValueError("File is unavailable or not a verified duplicate")
-            if session.get(ScanJob, file.scan_id).status != "completed":
-                raise ValueError("Only completed scans can be used for cleanup")
+            if active_id and active_id != file.scan_id:
+                raise ValueError("Pause the other active scan before cleanup")
             membership_query = (
                 select(GroupMember)
                 .join(DuplicateGroup)
