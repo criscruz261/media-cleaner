@@ -6,6 +6,16 @@ export type Scan = {
   discovered: number;
   processed: number;
   bytes_processed: number;
+  total_bytes?: number;
+  checkpoint_at?: string;
+  activity?: {
+    path: string;
+    phase: string;
+    bytes_done: number;
+    size: number;
+    frames_done: number;
+    frames_total: number;
+  }[];
   cache_hits: number;
   errors: number;
   error: string | null;

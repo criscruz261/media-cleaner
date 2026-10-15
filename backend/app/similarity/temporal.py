@@ -134,12 +134,14 @@ def finish_descriptor(duration: float, frames: list[dict], kind: str, **metadata
     return {"duration": duration, "frames": frames, "kind": kind, "sample_count": SAMPLE_COUNT, **metadata}
 
 
-def fingerprint_video(path: Path, checkpoint: Callable[[], None] = lambda: None) -> dict:
+def fingerprint_video(path: Path, checkpoint: Callable[[], None] = lambda: None, progress=None) -> dict:
     metadata = probe_video(path, checkpoint)
     duration = metadata.pop("duration")
     frame_interval = metadata.pop("frame_interval")
     frames = []
     for slot in range(SAMPLE_COUNT):
+        if progress:
+            progress(slot, SAMPLE_COUNT)
         checkpoint()
         timestamp = duration * (slot + 0.5) / SAMPLE_COUNT
         # FFmpeg accurate seeking yields the next frame. Offset one frame interval
@@ -151,7 +153,7 @@ def fingerprint_video(path: Path, checkpoint: Callable[[], None] = lambda: None)
     return finish_descriptor(duration, frames, "video", **metadata)
 
 
-def fingerprint_animation(path: Path, checkpoint: Callable[[], None] = lambda: None) -> dict:
+def fingerprint_animation(path: Path, checkpoint: Callable[[], None] = lambda: None, progress=None) -> dict:
     with Image.open(path) as image:
         count = image.n_frames
         if count > 2000:
@@ -168,6 +170,8 @@ def fingerprint_animation(path: Path, checkpoint: Callable[[], None] = lambda: N
         duration = sum(durations)
         frames, current, boundary = [], 0, durations[0]
         for slot in range(SAMPLE_COUNT):
+            if progress:
+                progress(slot, SAMPLE_COUNT)
             checkpoint()
             timestamp = duration * (slot + 0.5) / SAMPLE_COUNT
             while current < count - 1 and timestamp >= boundary:

@@ -11,10 +11,9 @@ from app.hashing.sha256 import hash_file, ScanStopped
 from app.metadata.extract import extract
 from app.core.media_tools import executable
 from app.scanner.discovery import discover
-from app.grouping.exact import build_groups
-from app.similarity.images import fingerprint_image, build_similar_groups, ALGORITHM, VERSION
+from app.grouping.live import LiveMatcher
+from app.similarity.images import fingerprint_image, ALGORITHM, VERSION
 from app.similarity import temporal
-from app.similarity.sequences import build_sequence_groups
 
 log = logging.getLogger("media_cleaner.scan")
 
@@ -26,10 +25,24 @@ class JobManager:
         self.shutdown_event = threading.Event()
         self.lock = threading.RLock()
         self.active = None
+        self.activity_lock = threading.Lock()
+        self.activities = {}
         with sessions.begin() as session:
             for job in session.scalars(select(ScanJob).where(ScanJob.status.in_(["running", "queued"]))):
                 job.status = "interrupted"
                 job.stage = "Restart interrupted this scan; resume explicitly"
+
+    def activity(self, scan_id):
+        with self.activity_lock:
+            return [dict(value) for (job_id, _), value in self.activities.items() if job_id == scan_id]
+
+    def update_activity(self, scan_id, file_id, **values):
+        with self.activity_lock:
+            self.activities.setdefault((scan_id, file_id), {}).update(values)
+
+    def clear_activity(self, scan_id, file_id):
+        with self.activity_lock:
+            self.activities.pop((scan_id, file_id), None)
 
     def start(self, scan_id: str):
         with self.lock:
@@ -47,11 +60,22 @@ class JobManager:
 
     def run(self, scan_id: str):
         log.info("scan_started", extra={"scan_id": scan_id})
+        matcher = None
         try:
             with self.sessions.begin() as session:
                 job = session.get(ScanJob, scan_id)
                 job.status, job.stage = "running", "discovery"
                 options = job.options
+                job.processed = session.scalar(
+                    select(func.count())
+                    .select_from(File)
+                    .where(File.scan_id == scan_id, File.status.in_(["ready", "error"]))
+                )
+                job.bytes_processed = session.scalar(
+                    select(func.coalesce(func.sum(File.size), 0)).where(
+                        File.scan_id == scan_id, File.status == "ready"
+                    )
+                )
 
             def checkpoint():
                 self.checkpoint(scan_id)
@@ -110,7 +134,10 @@ class JobManager:
                                         protected_reason=protection(path, options["protected_directories"]),
                                     )
                                 )
-                                session.get(ScanJob, scan_id).discovered += 1
+                                job = session.get(ScanJob, scan_id)
+                                job.discovered += 1
+                                job.total_bytes += expected.size
+                                job.updated_at = now()
                         except IntegrityError:
                             # A second path to the same inode (hard link or overlapping root).
                             pass
@@ -127,6 +154,7 @@ class JobManager:
                     raise ValueError("A scan root is unavailable or changed; history was retained") from exc
             with self.sessions.begin() as session:
                 session.get(ScanJob, scan_id).stage = "metadata_and_hashing"
+            matcher = LiveMatcher(self.sessions, scan_id, options, checkpoint)
             # Process every file's metadata, hash only size candidates. The queue is bounded.
             with ThreadPoolExecutor(max_workers=options["concurrency"], thread_name_prefix="media") as pool:
                 pending = set()
@@ -149,10 +177,12 @@ class JobManager:
                         if len(pending) >= options["concurrency"] * 2:
                             done, pending = wait(pending, return_when=FIRST_COMPLETED)
                             for future in done:
-                                future.result()
+                                matcher.add(future.result())
                     del page
-                for future in pending:
-                    future.result()
+                while pending:
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        matcher.add(future.result())
             checkpoint()
             for root_text in options["roots"]:
                 try:
@@ -176,14 +206,7 @@ class JobManager:
                 job = session.get(ScanJob, scan_id)
                 job.stage = "grouping"
                 session.commit()
-                build_groups(session, scan_id, checkpoint)
-                if options["mode"] == "similar":
-                    job.stage = "grouping_similar_media"
-                    session.commit()
-                    build_similar_groups(session, scan_id, options.get("sensitivity", "balanced"), checkpoint)
-                    build_sequence_groups(
-                        session, scan_id, options.get("sensitivity", "balanced"), checkpoint
-                    )
+                matcher.finish()
                 checkpoint()
                 session.refresh(job)
                 job.status, job.stage, job.updated_at = "completed", "complete", now()
@@ -200,6 +223,9 @@ class JobManager:
             with self.sessions.begin() as session:
                 job = session.get(ScanJob, scan_id)
                 job.status, job.error, job.updated_at = "failed", str(exc), now()
+        finally:
+            if matcher is not None:
+                matcher.close()
 
     def process_file(self, scan_id, file_id, checkpoint):
         checkpoint()
@@ -216,6 +242,8 @@ class JobManager:
             )
             key = expected.key(file.path)
             cached = session.get(FileHash, key)
+            was_ready = file.status == "ready"
+            was_processed = file.status in {"ready", "error"}
             media_type = file.media_type
             similar = session.get(ScanJob, scan_id).options["mode"] == "similar"
             candidate = candidate or similar
@@ -238,6 +266,29 @@ class JobManager:
         try:
             if identity(path) != expected:
                 raise ValueError("File changed since discovery; start a new scan")
+            if was_ready and (not candidate or file.sha256) and (not similar or previous is not None):
+                with self.sessions.begin() as session:
+                    session.get(ScanJob, scan_id).updated_at = now()
+                return file_id
+            self.update_activity(
+                scan_id,
+                file_id,
+                path=str(path),
+                phase="metadata",
+                bytes_done=0,
+                size=expected.size,
+                frames_done=0,
+                frames_total=0,
+            )
+
+            def hash_progress(value):
+                self.update_activity(scan_id, file_id, phase="hashing", bytes_done=value)
+
+            def frame_progress(value, total):
+                self.update_activity(
+                    scan_id, file_id, phase="comparing frames", frames_done=value, frames_total=total
+                )
+
             digest = None
             if cached:
                 fields, warnings = cached.metadata_fields, list(cached.metadata_warnings)
@@ -256,11 +307,11 @@ class JobManager:
                 if media_type == "video" and executable("ffprobe") and not fields.get("duration"):
                     fields, warnings = extract(path, media_type)
                 if candidate:
-                    digest = cached.digest or hash_file(path, expected, checkpoint)
+                    digest = cached.digest or hash_file(path, expected, checkpoint, hash_progress)
             else:
                 fields, warnings = extract(path, media_type)
                 if candidate:
-                    digest = hash_file(path, expected, checkpoint)
+                    digest = hash_file(path, expected, checkpoint, hash_progress)
             metadata_warnings = list(warnings)
             if similar:
                 try:
@@ -268,11 +319,12 @@ class JobManager:
                         descriptor = previous.value
                     elif sequence:
                         descriptor = (
-                            temporal.fingerprint_video(path, checkpoint)
+                            temporal.fingerprint_video(path, checkpoint, frame_progress)
                             if media_type == "video"
-                            else temporal.fingerprint_animation(path, checkpoint)
+                            else temporal.fingerprint_animation(path, checkpoint, frame_progress)
                         )
                     else:
+                        self.update_activity(scan_id, file_id, phase="comparing image")
                         descriptor = fingerprint_image(path)
                     if "skipped" in descriptor and descriptor["skipped"] not in warnings:
                         warnings = list(warnings) + [descriptor["skipped"]]
@@ -325,9 +377,9 @@ class JobManager:
                         )
                     )
                 job = session.get(ScanJob, scan_id)
-                job.processed += 1
-                job.bytes_processed += expected.size
-                job.cache_hits += int(cached is not None)
+                job.processed += int(not was_processed)
+                job.bytes_processed += 0 if was_ready else expected.size
+                job.cache_hits += int(cached is not None and not was_processed)
                 job.updated_at = now()
         except ScanStopped:
             raise
@@ -337,7 +389,13 @@ class JobManager:
                 file.status, file.error, file.sha256 = "error", str(exc), None
                 job = session.get(ScanJob, scan_id)
                 job.errors += 1
-                job.processed += 1
+                job.processed += int(not was_processed)
+                if was_ready:
+                    job.bytes_processed = max(0, job.bytes_processed - expected.size)
+                job.updated_at = now()
+        finally:
+            self.clear_activity(scan_id, file_id)
+        return file_id
 
     def close(self):
         self.shutdown_event.set()

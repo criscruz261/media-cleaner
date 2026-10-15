@@ -34,6 +34,7 @@ class ScanJob(Base):
     discovered: Mapped[int] = mapped_column(default=0)
     processed: Mapped[int] = mapped_column(default=0)
     bytes_processed: Mapped[int] = mapped_column(default=0)
+    total_bytes: Mapped[int] = mapped_column(default=0)
     cache_hits: Mapped[int] = mapped_column(default=0)
     errors: Mapped[int] = mapped_column(default=0)
     error: Mapped[str | None]
@@ -98,6 +99,7 @@ class FileHash(Base):
 
 class DuplicateGroup(Base):
     __tablename__ = "duplicate_groups"
+    updated_at: Mapped[str] = mapped_column(default=now, index=True)
     id: Mapped[str] = mapped_column(primary_key=True, default=uid)
     scan_id: Mapped[str] = mapped_column(ForeignKey("scan_jobs.id"), index=True)
     classification: Mapped[str] = mapped_column(default="EXACT_DUPLICATE")

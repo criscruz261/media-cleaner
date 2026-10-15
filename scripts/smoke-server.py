@@ -8,6 +8,7 @@ import tempfile
 from PIL import Image, ImageDraw
 import random
 import subprocess
+import time
 from app.core.media_tools import executable
 import uvicorn
 from app.api.main import create_app
@@ -83,8 +84,14 @@ with tempfile.TemporaryDirectory(prefix="media-cleaner-smoke-") as directory:
                 check=True,
                 timeout=30,
             )
+    live = "--live" in sys.argv
+    release = root / "release"
+    if live:
+        (media / "waiting.MOV").write_bytes(b"waiting")
     token = secrets.token_urlsafe(32)
     config = {
+        "live": live,
+        "release": str(release),
         "video": video,
         "similar": similar,
         "media": str(media),
@@ -95,8 +102,23 @@ with tempfile.TemporaryDirectory(prefix="media-cleaner-smoke-") as directory:
         ),
     }
     Path(sys.argv[1]).write_text(json.dumps(config))
+    application = create_app(root / "data", token=token)
+    if live:
+        from app.database.models import File
+        manager = application.state.manager
+        process = manager.process_file
+
+        def controlled(scan_id, file_id, checkpoint):
+            with manager.sessions() as session:
+                waiting = session.get(File, file_id).name == "waiting.MOV"
+            while waiting and not release.exists():
+                checkpoint()
+                time.sleep(0.05)
+            return process(scan_id, file_id, checkpoint)
+
+        manager.process_file = controlled
     uvicorn.run(
-        create_app(root / "data", token=token),
+        application,
         host="127.0.0.1",
         port=config["port"],
         access_log=False,

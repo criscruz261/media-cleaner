@@ -4,10 +4,12 @@ from collections import Counter
 from dataclasses import dataclass, field
 import json
 import math
-from sqlalchemy import select, delete
-from app.database.models import File, Fingerprint, DuplicateGroup, GroupMember, SimilarityMatch
+from sqlalchemy import delete
+from app.database.models import ScanJob, now, DuplicateGroup, GroupMember, SimilarityMatch
 from app.similarity.images import HashIndex, PRESETS
 from app.similarity.temporal import ALGORITHM, VERSION, MIN_MATCHES, duration_tolerance, compare_sequences
+
+from app.grouping.records import fingerprint_records
 
 
 def bucket(duration: float) -> int:
@@ -53,23 +55,16 @@ class SequenceCluster:
     maximum_duration_difference: float = 0
 
 
-def build_sequence_groups(session, scan_id, sensitivity, checkpoint):
+def sequence_matcher(session, scan_id, sensitivity, checkpoint):
     index, clusters = SequenceIndex(), {}
-    query = (
-        select(File.id, File.size, File.sha256, Fingerprint.value)
-        .join(Fingerprint, Fingerprint.file_id == File.id)
-        .where(
-            File.scan_id == scan_id,
-            File.status == "ready",
-            Fingerprint.algorithm == ALGORITHM,
-            Fingerprint.version == VERSION,
-        )
-        .order_by(File.path)
-        .execution_options(yield_per=128)
-    )
-    for file_id, size, digest, value in session.execute(query):
+    while True:
+        record = yield
+        if record is None:
+            break
+        file_id, size, digest, value = record
         checkpoint()
         if "frames" not in value:
+            session.commit()
             continue
         target = None
         matches = []
@@ -121,8 +116,29 @@ def build_sequence_groups(session, scan_id, sensitivity, checkpoint):
         target.count += 1
         target.total += size
         target.largest = max(target.largest, size)
+        live_group = session.get(DuplicateGroup, target.id)
+        live_group.member_count = target.count
+        live_group.recoverable = target.total - target.largest
+        live_group.updated_at = now()
+        live_group.review_status = "unreviewed" if target.count > 1 and len(target.digests) > 1 else "pending"
+        live_group.evidence = {
+            "algorithm": ALGORITHM,
+            "version": VERSION,
+            "media_kind": "sequence",
+            "member_kinds": sorted(target.kinds),
+            "sample_count": 9,
+            "minimum_matched_samples": target.minimum_matched,
+            "max_duration_difference_seconds": target.maximum_duration_difference,
+            "phash_limit": PRESETS[sensitivity][0],
+            "dhash_limit": PRESETS[sensitivity][1],
+            "sensitivity": sensitivity,
+            "grouping": "complete-link",
+            "note": "Sampled visuals only; audio and unsampled moments may differ. Review after scanning.",
+        }
         session.add(GroupMember(group_id=target.id, file_id=file_id, keep=True))
         session.flush()
+        session.get(ScanJob, scan_id).updated_at = now()
+        session.commit()
     for cluster in clusters.values():
         checkpoint()
         if cluster.count < 2 or len(cluster.digests) < 2:
@@ -147,3 +163,14 @@ def build_sequence_groups(session, scan_id, sensitivity, checkpoint):
         }
     checkpoint()
     session.commit()
+
+
+def build_sequence_groups(session, scan_id, sensitivity, checkpoint):
+    matcher = sequence_matcher(session, scan_id, sensitivity, checkpoint)
+    next(matcher)
+    for record in fingerprint_records(session, scan_id, ALGORITHM, VERSION):
+        matcher.send(record)
+    try:
+        matcher.send(None)
+    except StopIteration:
+        pass

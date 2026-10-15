@@ -10,7 +10,9 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | POST /folders/choose | Explicitly open a platform-native directory dialog |
 | POST /scans | Start `roots`, `mode` (similar/exact/images/videos), sensitivity (strict/balanced/broad), exclusions, hidden option |
 | GET /scans | Paginated persisted scan history |
-| GET /scans/{id} | Job state, stage and counters |
+| GET /scans/active | Recover the active or most recent paused/interrupted job |
+| GET /scans/{id} | Job state, saved file/byte counters, checkpoint timestamp and current-file activity |
+| GET /scans/{id}/matches | Paginated live groups, exact/similar counts, provisional flag and checkpoint timestamp |
 | POST /scans/{id}/pause | Request checkpoint pause |
 | POST /scans/{id}/cancel | Request checkpoint cancellation |
 | POST /scans/{id}/resume | Resume paused/interrupted/failed job when worker has stopped |
@@ -20,7 +22,7 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | GET /files?scan_id=... | Paginated inventory; optional status filter |
 | GET /files/{id} | Identity, status, metadata and warnings |
 | GET /files/{id}/preview | Normalized image preview or range-capable original video |
-| GET /groups?scan_id=... | Paginated unresolved exact groups, ordered by savings |
+| GET /groups?scan_id=... | Paginated unresolved exact/similar groups, ordered by savings |
 | GET /groups/{id} | Paginated current members and saved keep choices |
 | POST /groups/{id}/review | Set `keep_ids` or partial `changes:{file_id:boolean}`; at least one keeper |
 | POST /cleanup/plan | Dry run for `file_ids`, `group_id` (required for approximate groups), destination `trash` or `quarantine` |
@@ -31,6 +33,6 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | PUT /settings | Save protection/exclusions, workers, theme and destination |
 | GET /diagnostics | Download rotating local diagnostic log |
 
-List responses are `{items,total}` with `offset`/`limit`, except the observed-volume list. Limit caps vary from 100 to 200 by resource. A scan root must be an existing directory. Multiple roots share one scan and physical-file deduplication. Only completed scans are eligible for cleanup. Approximate groups require a saved manual review and an explicit group-scoped plan. Protected choices cannot be unchecked. No arbitrary shell commands, arbitrary preview paths, arbitrary shell access or permanent-delete API is exposed.
+List responses are `{items,total}` with `offset`/`limit`, except the observed-volume list. Limit caps vary from 100 to 200 by resource. A scan root must be an existing directory. Multiple roots share one scan and physical-file deduplication. Live groups are provisional; only completed scans permit review writes and cleanup. Approximate groups require a saved manual review and an explicit group-scoped plan. Protected choices cannot be unchecked. No arbitrary shell commands, arbitrary preview paths, arbitrary shell access or permanent-delete API is exposed.
 
 The `similar` mode now compares still photos/RAW and video/animation sequences. Sequence evidence includes `media_kind:sequence`, sample counts, duration difference, algorithm version and limitations. It remains approximate and requires manual review; no audio equality is asserted.

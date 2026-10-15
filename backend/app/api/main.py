@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from app.api.schemas import ScanRequest, ReviewRequest, PlanRequest, ExecuteRequest, RestoreRequest
 from app.core.config import Settings, data_directory, authentication_token
 from app.core.filesystem import identity, stored_identity
@@ -246,12 +246,25 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "total": session.scalar(select(func.count()).select_from(ScanJob)),
             }
 
+    @app.get("/api/v1/scans/active")
+    def active_scan():
+        with sessions() as session:
+            job = session.scalar(
+                select(ScanJob)
+                .where(ScanJob.status.in_(["queued", "running", "paused", "interrupted"]))
+                .order_by(
+                    case((ScanJob.status.in_(["queued", "running"]), 0), else_=1), ScanJob.created_at.desc()
+                )
+                .limit(1)
+            )
+            return {"scan": record(job) if job else None}
+
     def get_scan(scan_id):
         with sessions() as session:
             job = session.get(ScanJob, scan_id)
             if not job:
                 raise HTTPException(404, "Scan not found")
-            return record(job)
+            return record(job) | {"activity": manager.activity(scan_id), "checkpoint_at": job.updated_at}
 
     @app.get("/api/v1/scans/{scan_id}")
     def scan(scan_id: str):
@@ -274,12 +287,49 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 elif action == "resume" and job.status in {"paused", "interrupted", "failed"}:
                     if manager.active and not manager.active.done():
                         raise ValueError("Worker is stopping; try resume again shortly")
-                    job.status, job.processed, job.bytes_processed, job.cache_hits = "queued", 0, 0, 0
+                    job.status = "queued"
                     session.commit()
                     manager.start(scan_id)
                 else:
                     raise ValueError("This scan does not support that action in its current state")
                 return record(job)
+
+    @app.get("/api/v1/scans/{scan_id}/matches")
+    def live_matches(scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(10, ge=1, le=50)):
+        job = get_scan(scan_id)
+        with sessions() as session:
+            query = select(DuplicateGroup).where(
+                DuplicateGroup.scan_id == scan_id,
+                DuplicateGroup.member_count > 1,
+                DuplicateGroup.review_status.not_in(["pending", "resolved"]),
+            )
+            rows = [
+                record(group)
+                for group in session.scalars(
+                    query.order_by(DuplicateGroup.updated_at.desc(), DuplicateGroup.id)
+                    .offset(offset)
+                    .limit(limit)
+                )
+            ]
+            counts = dict(
+                session.execute(
+                    select(DuplicateGroup.classification, func.count())
+                    .where(
+                        DuplicateGroup.scan_id == scan_id,
+                        DuplicateGroup.member_count > 1,
+                        DuplicateGroup.review_status.not_in(["pending", "resolved"]),
+                    )
+                    .group_by(DuplicateGroup.classification)
+                ).all()
+            )
+            return {
+                "items": rows,
+                "total": sum(counts.values()),
+                "exact_groups": counts.get("EXACT_DUPLICATE", 0),
+                "similar_groups": counts.get("SIMILAR_CONTENT", 0),
+                "provisional": job["status"] != "completed",
+                "checkpoint_at": job["checkpoint_at"],
+            }
 
     @app.get("/api/v1/scans/{scan_id}/warnings")
     def scan_warnings(scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
@@ -394,7 +444,8 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     def groups(scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
         with sessions() as session:
             query = select(DuplicateGroup).where(
-                DuplicateGroup.scan_id == scan_id, DuplicateGroup.review_status != "resolved"
+                DuplicateGroup.scan_id == scan_id,
+                DuplicateGroup.review_status.not_in(["pending", "resolved"]),
             )
             return {
                 "items": [
@@ -436,6 +487,10 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             group = session.get(DuplicateGroup, group_id)
             if not group:
                 raise HTTPException(404, "Group not found")
+            if session.get(ScanJob, group.scan_id).status != "completed":
+                raise ValueError(
+                    "Live results are provisional. Wait for the scan to finish before reviewing or cleaning up."
+                )
             members = session.scalars(select(GroupMember).where(GroupMember.group_id == group_id)).all()
             ids = {member.file_id for member in members}
             keep_ids = (
@@ -510,7 +565,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                     .select_from(DuplicateGroup)
                     .where(
                         DuplicateGroup.scan_id == latest.id,
-                        DuplicateGroup.review_status != "resolved",
+                        DuplicateGroup.review_status.not_in(["pending", "resolved"]),
                         DuplicateGroup.classification == "EXACT_DUPLICATE",
                     )
                 ),
@@ -519,14 +574,14 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                     .select_from(DuplicateGroup)
                     .where(
                         DuplicateGroup.scan_id == latest.id,
-                        DuplicateGroup.review_status != "resolved",
+                        DuplicateGroup.review_status.not_in(["pending", "resolved"]),
                         DuplicateGroup.classification == "SIMILAR_CONTENT",
                     )
                 ),
                 "recoverable": session.scalar(
                     select(func.coalesce(func.sum(DuplicateGroup.recoverable), 0)).where(
                         DuplicateGroup.scan_id == latest.id,
-                        DuplicateGroup.review_status != "resolved",
+                        DuplicateGroup.review_status.not_in(["pending", "resolved"]),
                         DuplicateGroup.classification == "EXACT_DUPLICATE",
                     )
                 ),

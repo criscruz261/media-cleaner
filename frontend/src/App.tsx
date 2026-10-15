@@ -16,6 +16,8 @@ import { Review } from "./pages/Review";
 import { Cleanup } from "./pages/Cleanup";
 import { Settings } from "./pages/Settings";
 import { ErrorMessage } from "./components/ui";
+import { loadWorkspace, saveLocal, workspaceKey } from "./services/workspace";
+import type { Scan } from "./types/api";
 import { api, prefix } from "./services/api";
 import type {
   Cleanup as CleanupPlan,
@@ -29,17 +31,57 @@ const pages = [
   ["Settings", SettingsIcon],
 ] as const;
 export function App() {
+  const [saved] = useState(loadWorkspace);
   const [connected, setConnected] = useState(false),
     [token, setToken] = useState(""),
     [error, setError] = useState<unknown>(null),
-    [page, setPage] = useState("Dashboard"),
-    [scanId, setScanId] = useState(""),
+    [page, setPage] = useState(saved.page),
+    [scanId, setScanId] = useState(saved.scanId),
     [plan, setPlan] = useState<CleanupPlan | null>(null);
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: () => api<Preferences>("/settings"),
     enabled: connected,
   });
+  useEffect(() => {
+    saveLocal(workspaceKey, { page, scanId });
+  }, [page, scanId]);
+  useEffect(() => {
+    if (!connected) return;
+    let cancelled = false;
+    async function recover() {
+      try {
+        const active = await api<{ scan: Scan | null }>("/scans/active");
+        if (cancelled) return;
+        if (
+          active.scan &&
+          (!scanId ||
+            (page === "Scanner" &&
+              ["queued", "running"].includes(active.scan.status)))
+        ) {
+          setScanId(active.scan.id);
+          setPage("Scanner");
+          return;
+        }
+        if (scanId) {
+          try {
+            await api(`/scans/${scanId}`);
+          } catch {
+            if (!cancelled) {
+              setScanId(active.scan?.id ?? "");
+              setPage(active.scan ? "Scanner" : "Dashboard");
+            }
+          }
+        }
+      } catch {
+        /* Keep the saved scan selected during a temporary backend outage. */
+      }
+    }
+    void recover();
+    return () => {
+      cancelled = true;
+    };
+  }, [connected]);
   async function connect(value: string) {
     try {
       const response = await fetch(prefix + "/session", {

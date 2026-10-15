@@ -1,8 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, Play, Pause, Square, ArrowRight } from "lucide-react";
+import {
+  FolderOpen,
+  Play,
+  Pause,
+  Square,
+  ArrowRight,
+  ShieldCheck,
+} from "lucide-react";
 import { api, bytes } from "../services/api";
 import { useScanProgress } from "../hooks/useScanProgress";
+import { LiveMatches } from "../components/LiveMatches";
+import { loadDraft, saveLocal, draftKey } from "../services/workspace";
 import { ErrorMessage, Pagination } from "../components/ui";
 import type { Scan, Page } from "../types/api";
 export function Scanner({
@@ -14,13 +23,24 @@ export function Scanner({
   selectScan: (id: string) => void;
   navigate: (page: string) => void;
 }) {
-  const [roots, setRoots] = useState(""),
-    [excluded, setExcluded] = useState(""),
-    [extensions, setExtensions] = useState(""),
-    [hidden, setHidden] = useState(false),
-    [mode, setMode] = useState("similar"),
-    [sensitivity, setSensitivity] = useState("balanced"),
+  const [draft] = useState(loadDraft);
+  const [roots, setRoots] = useState(draft.roots),
+    [excluded, setExcluded] = useState(draft.excluded),
+    [extensions, setExtensions] = useState(draft.extensions),
+    [hidden, setHidden] = useState(draft.hidden),
+    [mode, setMode] = useState(draft.mode),
+    [sensitivity, setSensitivity] = useState(draft.sensitivity),
     [warningOffset, setWarningOffset] = useState(0);
+  useEffect(() => {
+    saveLocal(draftKey, {
+      roots,
+      excluded,
+      extensions,
+      hidden,
+      mode,
+      sensitivity,
+    });
+  }, [roots, excluded, extensions, hidden, mode, sensitivity]);
   const client = useQueryClient();
   const scan = useQuery({
     queryKey: ["scan", scanId],
@@ -199,81 +219,175 @@ export function Scanner({
         </form>
       </section>
       {scan.data && (
-        <section className="panel">
-          <div className="section-heading">
-            <h2>Current scan</h2>
-            <span className="badge">{scan.data.status}</span>
-          </div>
-          <p>{scan.data.stage.replaceAll("_", " ")}</p>
-          <progress
-            max={Math.max(scan.data.discovered, 1)}
-            value={scan.data.processed}
+        <>
+          <section className="panel">
+            <div className="section-heading">
+              <h2>Current scan</h2>
+              <span className="badge">{scan.data.status}</span>
+            </div>
+            <p>{scan.data.stage.replaceAll("_", " ")}</p>
+            <p className="file-path">{scan.data.options?.roots?.join(" · ")}</p>
+            {scan.data.stage === "discovery" ? (
+              <>
+                <progress aria-label="Discovering media" />
+                <p className="hint">
+                  Discovering files; the final total is not known yet.
+                </p>
+              </>
+            ) : (
+              <>
+                <progress
+                  aria-label="Saved file progress"
+                  max={Math.max(scan.data.discovered, 1)}
+                  value={scan.data.processed}
+                />
+                <p className="hint">
+                  {scan.data.processed} of {scan.data.discovered} file
+                  checkpoints saved ·{" "}
+                  {Math.min(
+                    100,
+                    Math.round(
+                      (scan.data.processed /
+                        Math.max(scan.data.discovered, 1)) *
+                        100,
+                    ),
+                  )}
+                  %
+                </p>
+              </>
+            )}
+            <div className="progress-stats">
+              <span>{scan.data.discovered} discovered</span>
+              <span>{scan.data.processed} processed</span>
+              <span>
+                {bytes(scan.data.bytes_processed)} /{" "}
+                {bytes(scan.data.total_bytes ?? 0)} saved media
+              </span>
+              <span>
+                {Math.max(0, scan.data.discovered - scan.data.processed)} files
+                remaining
+              </span>
+              <span>{scan.data.cache_hits} cached</span>
+              <span>{scan.data.errors} errors</span>
+            </div>
+            <div className="notice">
+              <ShieldCheck size={18} />
+              <p>
+                Saved automatically after each file
+                {scan.data.checkpoint_at
+                  ? ` · Last checkpoint ${new Date(scan.data.checkpoint_at).toLocaleTimeString()}`
+                  : ""}
+                . Refreshing this page does not stop the scan. After a backend
+                restart, choose Resume; an unfinished file starts again safely.
+              </p>
+            </div>
+            {!!scan.data.activity?.length && (
+              <div className="scan-activity" aria-label="Current scan activity">
+                {scan.data.activity.map((item) => (
+                  <div key={item.path}>
+                    <p className="file-path">
+                      <strong>{item.phase}</strong> · {item.path}
+                    </p>
+                    {item.phase === "hashing" ? (
+                      <>
+                        <progress
+                          aria-label={`Reading ${item.path}`}
+                          max={Math.max(item.size, 1)}
+                          value={item.bytes_done}
+                        />
+                        <small>
+                          {bytes(item.bytes_done)} / {bytes(item.size)}
+                        </small>
+                      </>
+                    ) : item.frames_total ? (
+                      <>
+                        <progress
+                          aria-label={`Comparing ${item.path}`}
+                          max={item.frames_total}
+                          value={item.frames_done}
+                        />
+                        <small>
+                          {item.frames_done} / {item.frames_total} samples
+                        </small>
+                      </>
+                    ) : (
+                      <progress aria-label={`Processing ${item.path}`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="actions">
+              {active ? (
+                <>
+                  <button
+                    disabled={control.isPending}
+                    onClick={() => control.mutate("pause")}
+                  >
+                    <Pause size={15} /> Pause
+                  </button>
+                  <button
+                    disabled={control.isPending}
+                    onClick={() => control.mutate("cancel")}
+                  >
+                    <Square size={14} /> Cancel
+                  </button>
+                </>
+              ) : ["paused", "interrupted", "failed"].includes(
+                  scan.data.status,
+                ) ? (
+                <>
+                  <button
+                    disabled={control.isPending}
+                    onClick={() => control.mutate("resume")}
+                  >
+                    <Play size={15} /> Resume
+                  </button>
+                  <button onClick={() => control.mutate("cancel")}>
+                    Cancel
+                  </button>
+                </>
+              ) : null}
+              <button
+                disabled={scan.data.status !== "completed"}
+                onClick={() => navigate("Review")}
+              >
+                Review matches <ArrowRight size={15} />
+              </button>
+            </div>
+            <ErrorMessage error={control.error} />
+            <ErrorMessage error={scan.data.error} />
+            {!!warnings.data?.total && (
+              <details>
+                <summary>
+                  {warnings.data.total} files have warnings or skipped
+                  comparisons
+                </summary>
+                {warnings.data.items.map((file) => (
+                  <div className="operation-item" key={file.id}>
+                    <strong>{file.path}</strong>
+                    {file.warnings.map((warning, index) => (
+                      <p key={index}>{warning}</p>
+                    ))}
+                  </div>
+                ))}
+                <Pagination
+                  offset={warningOffset}
+                  total={warnings.data.total}
+                  size={20}
+                  onChange={setWarningOffset}
+                />
+              </details>
+            )}
+            <ErrorMessage error={warnings.error} />
+          </section>
+          <LiveMatches
+            key={scanId}
+            scanId={scanId}
+            status={scan.data.status}
+            navigate={navigate}
           />
-          <div className="progress-stats">
-            <span>{scan.data.discovered} discovered</span>
-            <span>{scan.data.processed} processed</span>
-            <span>{bytes(scan.data.bytes_processed)} processed</span>
-            <span>{scan.data.cache_hits} cached</span>
-            <span>{scan.data.errors} errors</span>
-          </div>
-          <div className="actions">
-            {active ? (
-              <>
-                <button
-                  disabled={control.isPending}
-                  onClick={() => control.mutate("pause")}
-                >
-                  <Pause size={15} /> Pause
-                </button>
-                <button
-                  disabled={control.isPending}
-                  onClick={() => control.mutate("cancel")}
-                >
-                  <Square size={14} /> Cancel
-                </button>
-              </>
-            ) : ["paused", "interrupted", "failed"].includes(
-                scan.data.status,
-              ) ? (
-              <>
-                <button
-                  disabled={control.isPending}
-                  onClick={() => control.mutate("resume")}
-                >
-                  <Play size={15} /> Resume
-                </button>
-                <button onClick={() => control.mutate("cancel")}>Cancel</button>
-              </>
-            ) : null}
-            <button onClick={() => navigate("Review")}>
-              Review matches <ArrowRight size={15} />
-            </button>
-          </div>
-          <ErrorMessage error={control.error} />
-          <ErrorMessage error={scan.data.error} />
-          {!!warnings.data?.total && (
-            <details>
-              <summary>
-                {warnings.data.total} files have warnings or skipped comparisons
-              </summary>
-              {warnings.data.items.map((file) => (
-                <div className="operation-item" key={file.id}>
-                  <strong>{file.path}</strong>
-                  {file.warnings.map((warning, index) => (
-                    <p key={index}>{warning}</p>
-                  ))}
-                </div>
-              ))}
-              <Pagination
-                offset={warningOffset}
-                total={warnings.data.total}
-                size={20}
-                onChange={setWarningOffset}
-              />
-            </details>
-          )}
-          <ErrorMessage error={warnings.error} />
-        </section>
+        </>
       )}
     </>
   );

@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
 import math
 import imagehash
 from PIL import Image, ImageStat
-from sqlalchemy import select, delete
-from app.database.models import File, Fingerprint, DuplicateGroup, GroupMember, SimilarityMatch
+from sqlalchemy import delete
+from app.database.models import ScanJob, now, DuplicateGroup, GroupMember, SimilarityMatch
+
+from app.grouping.records import fingerprint_records
 
 ALGORITHM = "imagehash-phash-dhash"
 VERSION = "2"
@@ -109,27 +110,17 @@ class Cluster:
     max_dhash: int = 0
 
 
-def build_similar_groups(session, scan_id: str, sensitivity: str, checkpoint: Callable[[], None]):
+def image_matcher(session, scan_id, sensitivity, checkpoint):
     thresholds = PRESETS[sensitivity]
     index, clusters = HashIndex(), {}
-    scan_files = select(File.id).where(File.scan_id == scan_id)
-    session.execute(delete(SimilarityMatch).where(SimilarityMatch.left_id.in_(scan_files)))
-    query = (
-        select(File.id, File.size, File.sha256, Fingerprint.value)
-        .join(Fingerprint, Fingerprint.file_id == File.id)
-        .where(
-            File.scan_id == scan_id,
-            File.status == "ready",
-            File.media_type == "image",
-            Fingerprint.algorithm == ALGORITHM,
-            Fingerprint.version == VERSION,
-        )
-        .order_by(File.path)
-        .execution_options(yield_per=128)
-    )
-    for file_id, size, digest, value in session.execute(query):
+    while True:
+        record = yield
+        if record is None:
+            break
+        file_id, size, digest, value = record
         checkpoint()
         if "phash" not in value:
+            session.commit()
             continue
         signature = Signature.from_value(value)
         target = None
@@ -181,8 +172,27 @@ def build_similar_groups(session, scan_id: str, sensitivity: str, checkpoint: Ca
         target.count += 1
         target.total_bytes += size
         target.largest = max(target.largest, size)
+        live_group = session.get(DuplicateGroup, target.id)
+        live_group.member_count = target.count
+        live_group.recoverable = target.total_bytes - target.largest
+        live_group.updated_at = now()
+        live_group.review_status = "unreviewed" if target.count > 1 and len(target.digests) > 1 else "pending"
+        live_group.evidence = {
+            "algorithm": ALGORITHM,
+            "version": VERSION,
+            "hash_bits": 64,
+            "sensitivity": sensitivity,
+            "phash_limit": thresholds[0],
+            "dhash_limit": thresholds[1],
+            "max_phash_distance": target.max_phash,
+            "max_dhash_distance": target.max_dhash,
+            "grouping": "complete-link",
+            "note": "Approximate appearance only; review after the scan finishes.",
+        }
         session.add(GroupMember(group_id=target.id, file_id=file_id, keep=True))
         session.flush()
+        session.get(ScanJob, scan_id).updated_at = now()
+        session.commit()
     for cluster in clusters.values():
         checkpoint()
         if cluster.count < 2 or len(cluster.digests) < 2:
@@ -206,3 +216,14 @@ def build_similar_groups(session, scan_id: str, sensitivity: str, checkpoint: Ca
         }
     checkpoint()
     session.commit()
+
+
+def build_similar_groups(session, scan_id, sensitivity, checkpoint):
+    matcher = image_matcher(session, scan_id, sensitivity, checkpoint)
+    next(matcher)
+    for record in fingerprint_records(session, scan_id, ALGORITHM, VERSION):
+        matcher.send(record)
+    try:
+        matcher.send(None)
+    except StopIteration:
+        pass

@@ -214,9 +214,9 @@ def test_dashboard_does_not_count_similar_as_exact_or_double_savings(client, wor
 def test_existing_phase1_database_is_upgraded_without_losing_history(tmp_path):
     from alembic import command
     from alembic.config import Config
-    from sqlalchemy import create_engine, inspect
-    from sqlalchemy.orm import Session
-    from app.database.models import ScanJob
+    from sqlalchemy import create_engine, inspect, MetaData, Table
+    from app.database.models import now
+    from uuid import uuid4
     from app.api.main import create_app
     from fastapi.testclient import TestClient
 
@@ -228,11 +228,24 @@ def test_existing_phase1_database_is_upgraded_without_losing_history(tmp_path):
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.upgrade(config, "0001")
-    with Session(engine) as session:
-        old = ScanJob(options={"roots": []}, status="completed")
-        session.add(old)
-        session.commit()
-        old_id = old.id
+    old_id = str(uuid4())
+    legacy = Table("scan_jobs", MetaData(), autoload_with=engine)
+    with engine.begin() as connection:
+        connection.execute(
+            legacy.insert().values(
+                id=old_id,
+                options={"roots": []},
+                status="completed",
+                stage="complete",
+                discovered=0,
+                processed=0,
+                bytes_processed=0,
+                cache_hits=0,
+                errors=0,
+                created_at=now(),
+                updated_at=now(),
+            )
+        )
     engine.dispose()
     application = create_app(data, token="test")
     with TestClient(

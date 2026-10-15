@@ -1,6 +1,6 @@
 # Database
 
-SQLite runs with `journal_mode=WAL`, foreign keys ON, and a 30-second busy timeout. Startup upgrades through Alembic revision `0002`; revision `0001` creates the initial schema and `0002` adds the image-fingerprint cache-key index. The migration explicitly declares columns, indexes and constraints; it does not import mutable application metadata. Later schema changes require a new revision. Back up a stopped database and its WAL safely before upgrades; do not move an active WAL database onto network storage.
+SQLite runs with `journal_mode=WAL`, foreign keys ON, and a 30-second busy timeout. Startup upgrades through Alembic revision `0003`; revision `0001` creates the initial schema and `0002` adds the image-fingerprint cache-key index; `0003` adds persistent scan byte totals and group update timestamps, backfilling existing history. The migration explicitly declares columns, indexes and constraints; it does not import mutable application metadata. Later schema changes require a new revision. Back up a stopped database and its WAL safely before upgrades; do not move an active WAL database onto network storage.
 
 | Table | Role |
 | --- | --- |

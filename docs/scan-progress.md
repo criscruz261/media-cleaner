@@ -1,0 +1,11 @@
+# Live scanning and recovery
+
+The Scanner page shows discovery activity, saved file progress and percentage, processed/total media bytes, remaining files, errors, and the latest checkpoint time. Active workers show current-file metadata/image work, bytes read during SHA-256, or video/animation sample progress. Discovery has no percentage because its final total is still unknown. Byte totals are logical media sizes, not an estimate of processing time.
+
+Exact and similar groups appear with previews while other files are still processing. The page polls for live groups every second; scan snapshots also arrive through SSE, with polling fallback. Groups may gain members and their order may change. Live groups are provisional and read-only; keep choices and cleanup require scan completion. Exact original-name recommendations are finalized at completion. Approximate groups still start with every file kept.
+
+The worker runs independently of the browser. Refreshing or reopening the local app restores the selected scan and saved form from browser storage and reconnects to its current status. If browser storage is unavailable or cleared, authenticated active-job discovery recovers the running job, or the latest paused/interrupted job. Reopening the page never creates or resumes a job automatically.
+
+SQLite saves each completed file, identity, metadata, digest/descriptors, counters, and incremental results. After a backend restart, the scan is marked interrupted: choose **Resume**. Resume re-enumerates the roots and validates file identities, skips completed unchanged file work, and rebuilds provisional matching indexes from saved descriptors. Missing/changed files are reported rather than trusted. Saved review history from completed scans is retained. New files discovered during resume are added to the totals.
+
+Checkpoints are per completed file, not an open-directory cursor or partial SHA-256/decoder state. An unfinished file restarts safely; discovery and lightweight grouping may repeat. Current-file activity is transient. A decoder that was unavailable or skipped remains reported in warnings; install the needed tools and start a new scan to retry those comparisons. Database and cache live in the application's local data directory; browser storage alone is not the checkpoint.

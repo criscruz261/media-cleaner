@@ -76,7 +76,7 @@ def test_database_migration_wal_and_restart(tmp_path, workspace):
         with client.app.state.sessions() as session:
             assert session.execute(text("PRAGMA journal_mode")).scalar() == "wal"
             assert session.execute(text("PRAGMA foreign_keys")).scalar() == 1
-            assert session.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002"
+            assert session.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0003"
             assert len(inspect(session.bind).get_table_names()) == 13  # 12 domain tables + migration version
     with TestClient(
         create_app(data, token="test"),

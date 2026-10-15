@@ -901,3 +901,21 @@ footer span:last-child {
     max-width: 100%;
   }
 }
+
+.live-match {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 10px;
+}
+.live-match h3 {
+  margin: 10px 0;
+}
+.scan-activity {
+  display: grid;
+  gap: 15px;
+  margin-top: 18px;
+}
+.scan-activity small {
+  font-size: 10px;
+  color: var(--muted);
+}

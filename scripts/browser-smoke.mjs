@@ -1,6 +1,6 @@
 // Runs only against temporary fixtures created by smoke-server.py.
 import { chromium } from "../frontend/node_modules/playwright-core/index.mjs";
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 const fixture = JSON.parse(await readFile(process.argv[2], "utf8"));
 const executable =
   process.env.CHROME_PATH ??
@@ -20,27 +20,59 @@ try {
   await page.getByRole("button", { name: "Scanner", exact: true }).click();
   await page.getByLabel("Folder paths · one per line").fill(fixture.media);
   await page.getByRole("button", { name: "Start scan", exact: true }).click();
+  if (fixture.live) {
+    await page
+      .getByRole("heading", { name: /Exact copies · 2 files/ })
+      .waitFor();
+    if (fixture.similar)
+      await page
+        .getByRole("heading", { name: /Similar photos · 3 files/ })
+        .waitFor();
+    const saved = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("media-cleaner.workspace.v1")),
+    );
+    if (!saved.scanId) throw new Error("Scan selection was not saved");
+    await page.reload();
+    await page
+      .getByRole("heading", { name: /Exact copies · 2 files/ })
+      .waitFor();
+    const restored = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("media-cleaner.workspace.v1")),
+    );
+    if (restored.scanId !== saved.scanId)
+      throw new Error("Refresh replaced the active scan");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page
+      .getByRole("heading", { name: /Exact copies · 2 files/ })
+      .waitFor();
+    const recovered = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("media-cleaner.workspace.v1")),
+    );
+    if (recovered.scanId !== saved.scanId)
+      throw new Error("Server recovery lost the active scan");
+    await mkdir(fixture.artifacts, { recursive: true });
+    await page.screenshot({
+      path: fixture.artifacts + "/live-scanner.png",
+      fullPage: true,
+    });
+    await writeFile(fixture.release, "go");
+  }
   await page.getByText("complete", { exact: true }).waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "Review matches" }).click();
   const group = fixture.video
-    ? page
-        .locator(".group-card")
-        .filter({
-          has: page.getByRole("heading", {
-            name: "2 similar videos / animations",
-          }),
-        })
+    ? page.locator(".group-card").filter({
+        has: page.getByRole("heading", {
+          name: "2 similar videos / animations",
+        }),
+      })
     : fixture.similar
-      ? page
-          .locator(".group-card")
-          .filter({
-            has: page.getByRole("heading", { name: "3 similar photos" }),
-          })
-      : page
-          .locator(".group-card")
-          .filter({
-            has: page.getByRole("heading", { name: "2 exact copies" }),
-          });
+      ? page.locator(".group-card").filter({
+          has: page.getByRole("heading", { name: "3 similar photos" }),
+        })
+      : page.locator(".group-card").filter({
+          has: page.getByRole("heading", { name: "2 exact copies" }),
+        });
   await group.waitFor();
   const boxes = group.getByRole("checkbox");
   if ((await boxes.count()) !== (fixture.similar ? 3 : 2))
