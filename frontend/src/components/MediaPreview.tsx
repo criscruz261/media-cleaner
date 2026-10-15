@@ -1,8 +1,17 @@
 import { useState } from "react";
-import { ExternalLink, ZoomIn } from "lucide-react";
+import { ExternalLink, ZoomIn, Play } from "lucide-react";
 import { prefix } from "../services/api";
 import type { MediaFile } from "../types/api";
-export function MediaPreview({ file }: { file: MediaFile }) {
+export function MediaPreview({
+  file,
+  thumbnailFirst = false,
+}: {
+  file: MediaFile;
+  thumbnailFirst?: boolean;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const thumbnail = `${prefix}/files/${file.id}/thumbnail`;
   const [failed, setFailed] = useState(false),
     [zoom, setZoom] = useState(false);
   const url = `${prefix}/files/${file.id}/preview`;
@@ -11,9 +20,29 @@ export function MediaPreview({ file }: { file: MediaFile }) {
       <div className="preview">
         {failed ? (
           <p>Preview unavailable for this format. Exact hashing still works.</p>
+        ) : file.media_type === "video" && thumbnailFirst && !playing ? (
+          <button
+            className="image-button video-thumbnail"
+            aria-label={`Play ${file.name}`}
+            onClick={() => setPlaying(true)}
+          >
+            {thumbnailFailed ? (
+              <span>Thumbnail unavailable · Play video</span>
+            ) : (
+              <img
+                loading="lazy"
+                src={thumbnail}
+                alt={`Thumbnail of ${file.name}`}
+                onError={() => setThumbnailFailed(true)}
+              />
+            )}
+            <Play size={28} />
+          </button>
         ) : file.media_type === "video" ? (
           <video
             controls
+            autoPlay={thumbnailFirst && playing}
+            poster={`${prefix}/files/${file.id}/thumbnail`}
             preload="none"
             playsInline
             src={url}
@@ -28,7 +57,7 @@ export function MediaPreview({ file }: { file: MediaFile }) {
           >
             <img
               loading="lazy"
-              src={url}
+              src={thumbnailFirst ? thumbnail : url}
               alt={file.name}
               onError={() => setFailed(true)}
             />

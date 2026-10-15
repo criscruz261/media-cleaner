@@ -416,6 +416,25 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "warnings": metadata.warnings if metadata else [],
             }
 
+    @app.get("/api/v1/files/{file_id}/thumbnail")
+    def file_thumbnail(file_id: str):
+        from app.metadata.thumbnails import thumbnail
+
+        with sessions() as session:
+            file = session.get(File, file_id)
+            if not file or file.status != "ready":
+                raise HTTPException(404, "Media unavailable")
+            path, expected = Path(file.path), stored_identity(file)
+            if identity(path) != expected:
+                raise HTTPException(409, "Media changed since scanning")
+            try:
+                data = thumbnail(str(path), expected.key(str(path)), file.media_type)
+            except Exception:
+                raise HTTPException(415, "Thumbnail unavailable for this format")
+            if identity(path) != expected:
+                raise HTTPException(409, "Media changed since scanning")
+            return StreamingResponse(iter([data]), media_type="image/jpeg")
+
     @app.get("/api/v1/files/{file_id}/preview")
     def preview(file_id: str):
         with sessions() as session:

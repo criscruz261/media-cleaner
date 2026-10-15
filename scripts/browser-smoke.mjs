@@ -59,6 +59,18 @@ try {
     await writeFile(fixture.release, "go");
   }
   await page.getByText("complete", { exact: true }).waitFor({ timeout: 30000 });
+  // Completed Scanner cards expose the same choices and group actions as Review.
+  await page
+    .locator(".group-card")
+    .first()
+    .getByRole("checkbox")
+    .first()
+    .waitFor();
+  await page
+    .locator(".group-card")
+    .first()
+    .getByRole("button", { name: /Delete unchecked/ })
+    .waitFor();
   await page.getByRole("button", { name: "Review matches" }).click();
   const group = fixture.video
     ? page.locator(".group-card").filter({
@@ -116,6 +128,20 @@ try {
     )
       throw new Error("Reset all did not reset every video");
     await comparison.getByRole("button", { name: "Close comparison" }).click();
+    await group
+      .getByRole("button", { name: /^Play / })
+      .first()
+      .click();
+    const posterUrl = await group
+      .locator("video")
+      .first()
+      .getAttribute("poster");
+    const poster = await page.request.get(new URL(posterUrl, page.url()).href);
+    if (
+      poster.status() !== 200 ||
+      !poster.headers()["content-type"].includes("image/jpeg")
+    )
+      throw new Error("Video thumbnail unavailable");
     const video = group.locator("video").first();
     await video.evaluate(async (element) => {
       element.muted = true;
@@ -130,7 +156,7 @@ try {
       .filter({ has: page.locator(".filename", { hasText: "reencoded.mp4" }) })
       .getByRole("checkbox")
       .click();
-    await group.getByRole("button", { name: /Preview cleanup · 1/ }).waitFor();
+    await group.getByRole("button", { name: /Delete unchecked · 1/ }).waitFor();
     await group.locator(".evidence summary").click();
     await group.getByText(/time-spaced visual samples match/).waitFor();
     await mkdir(fixture.artifacts, { recursive: true });
@@ -147,7 +173,7 @@ try {
       .filter({ has: page.locator(".filename", { hasText: "resized.jpg" }) })
       .getByRole("checkbox")
       .click();
-    await group.getByRole("button", { name: /Preview cleanup · 1/ }).waitFor();
+    await group.getByRole("button", { name: /Delete unchecked · 1/ }).waitFor();
     await group.locator(".evidence summary").click();
     await group.getByText(/Maximum pairwise pHash distance/).waitFor();
     await mkdir(fixture.artifacts, { recursive: true });
@@ -163,7 +189,7 @@ try {
       throw new Error("Original not prechecked");
   }
   await group.locator(".group-actions select").selectOption("quarantine");
-  await group.getByRole("button", { name: /Preview cleanup/ }).click();
+  await group.getByRole("button", { name: /Delete unchecked/ }).click();
   await page
     .getByRole("heading", { name: /Dry-run cleanup preview/ })
     .waitFor();

@@ -13,15 +13,17 @@ import { useScanProgress } from "../hooks/useScanProgress";
 import { LiveMatches } from "../components/LiveMatches";
 import { loadDraft, saveLocal, draftKey } from "../services/workspace";
 import { ErrorMessage, Pagination } from "../components/ui";
-import type { Scan, Page } from "../types/api";
+import type { Scan, Page, Cleanup } from "../types/api";
 export function Scanner({
   scanId,
   selectScan,
   navigate,
+  onPlan,
 }: {
   scanId: string;
   selectScan: (id: string) => void;
   navigate: (page: string) => void;
+  onPlan?: (plan: Cleanup) => void;
 }) {
   const [draft] = useState(loadDraft);
   const [roots, setRoots] = useState(draft.roots),
@@ -382,6 +384,7 @@ export function Scanner({
             <ErrorMessage error={warnings.error} />
           </section>
           <LiveMatches
+            onPlan={onPlan}
             key={scanId}
             scanId={scanId}
             status={scan.data.status}

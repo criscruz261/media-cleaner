@@ -102,3 +102,34 @@ def test_image_preview_and_range_video(client, workspace):
             assert response.status_code == 206
             assert response.content == b"234"
             assert response.headers["content-range"] == "bytes 2-4/10"
+
+
+def test_thumbnails_are_cached_and_reject_changed_sources(client, workspace, monkeypatch):
+    from PIL import Image
+    from app.metadata.thumbnails import thumbnail
+    from conftest import scan
+
+    (workspace / "clip.MOV").write_bytes(b"synthetic")
+    calls = []
+
+    def frame(path, timestamp):
+        calls.append(path)
+        return Image.new("RGB", (640, 360), "green")
+
+    monkeypatch.setattr("app.metadata.thumbnails.sample_video_frame", frame)
+    thumbnail.cache_clear()
+    job = scan(client, [workspace])
+    file = client.get(f"/api/v1/files?scan_id={job['id']}").json()["items"][0]
+    url = f"/api/v1/files/{file['id']}/thumbnail"
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    from io import BytesIO
+
+    assert Image.open(BytesIO(response.content)).width <= 480
+    assert client.get(url).content == response.content
+    assert len(calls) == 1
+    (workspace / "clip.MOV").write_bytes(b"changed")
+    assert client.get(url).status_code == 409
+    assert client.get("/api/v1/files/missing/thumbnail").status_code == 404
+    thumbnail.cache_clear()

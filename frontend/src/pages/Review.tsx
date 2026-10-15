@@ -77,7 +77,12 @@ export function Review({
         </Empty>
       ) : (
         groups.data.items.map((group) => (
-          <GroupCard key={group.id} group={group} onPlan={onPlan} />
+          <GroupCard
+            key={group.id}
+            group={group}
+            onPlan={onPlan}
+            thumbnailFirst
+          />
         ))
       )}
       <ErrorMessage error={groups.error} />
@@ -90,12 +95,14 @@ export function Review({
     </>
   );
 }
-function GroupCard({
+export function GroupCard({
   group,
   onPlan,
+  thumbnailFirst = false,
 }: {
   group: Group;
   onPlan: (plan: Cleanup) => void;
+  thumbnailFirst?: boolean;
 }) {
   const [offset, setOffset] = useState(0),
     [destination, setDestination] = useState<"trash" | "quarantine">("trash");
@@ -214,21 +221,6 @@ function GroupCard({
               className={`media-card ${file.keep ? "kept" : ""}`}
               key={file.id}
             >
-              <MediaPreview file={file} />
-              <strong className="filename">{file.name}</strong>
-              <p className="file-path">{file.path}</p>
-              <div className="file-meta">
-                <span>{bytes(file.size)}</span>
-                {!!file.metadata.width && (
-                  <span>
-                    {String(file.metadata.width)} ×{" "}
-                    {String(file.metadata.height)}
-                  </span>
-                )}
-                {file.id === group.recommended_id && (
-                  <span>Suggested keeper</span>
-                )}
-              </div>
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -244,6 +236,21 @@ function GroupCard({
                 />
                 <Check size={14} /> Keep this file
               </label>
+              <MediaPreview file={file} thumbnailFirst={thumbnailFirst} />
+              <strong className="filename">{file.name}</strong>
+              <p className="file-path">{file.path}</p>
+              <div className="file-meta">
+                <span>{bytes(file.size)}</span>
+                {!!file.metadata.width && (
+                  <span>
+                    {String(file.metadata.width)} ×{" "}
+                    {String(file.metadata.height)}
+                  </span>
+                )}
+                {file.id === group.recommended_id && (
+                  <span>Suggested keeper</span>
+                )}
+              </div>
               {file.protected_reason && (
                 <p className="protected">
                   <ShieldCheck size={12} />
@@ -268,6 +275,10 @@ function GroupCard({
         size={50}
         onChange={setOffset}
       />
+      <p className="hint">
+        Check the files to keep. Uncheck unwanted files, then preview deletion
+        for this group. You must confirm before anything is moved.
+      </p>
       <div className="group-actions">
         <div>
           <label htmlFor={`destination-${group.id}`}>Cleanup destination</label>
@@ -287,7 +298,7 @@ function GroupCard({
           disabled={!eligible.length || plan.isPending || review.isPending}
           onClick={() => plan.mutate()}
         >
-          Preview cleanup · {eligible.length} unchecked on this page{" "}
+          Delete unchecked · {eligible.length} on this page{" "}
           <ArrowRight size={15} />
         </button>
       </div>

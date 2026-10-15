@@ -21,6 +21,7 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | GET /volumes | Previously observed volumes; not an exhaustive OS volume picker |
 | GET /files?scan_id=... | Paginated inventory; optional status filter |
 | GET /files/{id} | Identity, status, metadata and warnings |
+| GET /files/{id}/thumbnail | Small JPEG still/video poster; identity checked, bounded in-memory cache |
 | GET /files/{id}/preview | Normalized image preview or range-capable original video |
 | GET /groups?scan_id=... | Paginated unresolved exact/similar groups, ordered by savings |
 | GET /groups/{id} | Paginated current members and saved keep choices |

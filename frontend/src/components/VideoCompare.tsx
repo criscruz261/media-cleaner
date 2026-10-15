@@ -162,6 +162,7 @@ function Comparison({
                 muted
                 playsInline
                 preload="auto"
+                poster={`${prefix}/files/${file.id}/thumbnail`}
                 src={`${prefix}/files/${file.id}/preview`}
                 aria-label={file.name}
                 onCanPlay={() =>

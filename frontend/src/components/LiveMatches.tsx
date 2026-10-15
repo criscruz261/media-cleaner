@@ -1,3 +1,5 @@
+import { GroupCard } from "../pages/Review";
+import type { Cleanup } from "../types/api";
 import { VideoCompare } from "./VideoCompare";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -15,10 +17,12 @@ export function LiveMatches({
   scanId,
   status,
   navigate,
+  onPlan,
 }: {
   scanId: string;
   status: string;
   navigate: (page: string) => void;
+  onPlan?: (plan: Cleanup) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const running = ["queued", "running"].includes(status);
@@ -57,9 +61,18 @@ export function LiveMatches({
         </div>
       )}
       {matches.data?.items.length ? (
-        matches.data.items.map((group) => (
-          <LiveMatch key={group.id} group={group} running={running} />
-        ))
+        matches.data.items.map((group) =>
+          status === "completed" && onPlan ? (
+            <GroupCard
+              key={group.id}
+              group={group}
+              onPlan={onPlan}
+              thumbnailFirst
+            />
+          ) : (
+            <LiveMatch key={group.id} group={group} running={running} />
+          ),
+        )
       ) : (
         <p className="muted">
           {running
@@ -113,10 +126,14 @@ function LiveMatch({ group, running }: { group: Group; running: boolean }) {
       <div className="media-grid">
         {detail.data?.files.map((file) => (
           <div className="media-card" key={file.id}>
-            <MediaPreview file={file} />
+            <MediaPreview file={file} thumbnailFirst />
             <strong className="filename">{file.name}</strong>
             <p className="file-path">{file.path}</p>
             <span className="muted">{bytes(file.size)}</span>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={file.keep} disabled readOnly />{" "}
+              Keep this file · available after scan completes
+            </label>
           </div>
         ))}
       </div>

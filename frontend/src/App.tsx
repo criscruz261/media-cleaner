@@ -213,6 +213,10 @@ export function App() {
             <Dashboard navigate={setPage} selectScan={setScanId} />
           ) : page === "Scanner" ? (
             <Scanner
+              onPlan={(value) => {
+                setPlan(value);
+                setPage("Cleanup");
+              }}
               scanId={scanId}
               selectScan={setScanId}
               navigate={setPage}
