@@ -1,0 +1,15 @@
+# Architecture
+
+The browser talks to one loopback FastAPI service. FastAPI serves the production React build and `/api/v1`; there are no external fonts, CDNs, cloud analysis calls, or account services. In development Vite proxies the API. React Query owns server state; component state is sufficient for navigation/forms, so Zustand is not added unnecessarily.
+
+API handlers validate Pydantic requests, enforce auth/origins, and delegate to managed workers or cleanup services. SQLAlchemy sessions are scoped to units of work; no shared live Session crosses threads. Alembic applies a frozen initial schema. SQLite uses WAL, foreign keys, and a busy timeout. Store the database on local storage, even when scanning network-mounted media.
+
+One managed scan coordinator is active at a time. Discovery uses `os.scandir`, skips symbolic links, and streams records into SQLite. Hard-link and overlapping-root aliases are deduplicated with a per-scan device/inode constraint. Processing reads database pages of 128 records and limits outstanding tasks to twice configured I/O concurrency (1–8 workers). File reads use 1 MiB chunks. Grouping uses SQL size/hash indexes and streams matching records; no image-to-image quadratic comparison exists in Phase 1. API pages cap result sizes. A very large single review/cleanup group can still require a group-level safety query; this is not a benchmarked 100k-file guarantee.
+
+Workers check persisted state during discovery and each hashing chunk. Pause/cancel stops processing at checkpoints. Resume re-enumerates the roots, retains snapshot records, and reuses identity-keyed caches; it is restartable processing, not a persisted open-directory cursor. Metadata subprocesses finish or time out (30 seconds). Shutdown signals workers and joins their managed executors. Startup marks abandoned running jobs interrupted and never silently restarts cleanup.
+
+Cleanup is serialized against scan creation and review writes by the coordinator lock. Dry-run plans expire after ten minutes and have independent one-use confirmation tokens. Whole-batch validation precedes mutations. Per-item durable `moving` intent is saved before filesystem operations, then success/failure is saved. A process crash can occur between filesystem and database commits; interrupted history preserves source and quarantine target for explicit recovery. OS Trash recovery is delegated to the OS.
+
+The old monolithic app is preserved under `legacy/`, not used by the current launch scripts. Its dHash functionality is not mixed into the new exact-only Phase 1 schema or claimed as Phase 2. New similarity engines will use the reserved versioned fingerprint and evidence tables. Desktop lifecycle, bundled dependencies, signed installers and native release validation belong to Phase 5; see `desktop/README.md`.
+
+Implementation references: [FastAPI lifespan](https://fastapi.tiangolo.com/advanced/events/), [SQLAlchemy SQLite integration](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html), [Vite prerequisites](https://vite.dev/guide/).
