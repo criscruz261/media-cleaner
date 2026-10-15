@@ -279,8 +279,10 @@ export function Scanner({
                 {scan.data.checkpoint_at
                   ? ` · Last checkpoint ${new Date(scan.data.checkpoint_at).toLocaleTimeString()}`
                   : ""}
-                . Refreshing this page does not stop the scan. After a backend
-                restart, choose Resume; an unfinished file starts again safely.
+                . Completed-file analysis and selections are also saved in
+                .media-cleaner-cache inside each selected folder. Refreshing
+                this page does not stop the scan. After a backend restart,
+                choose Resume; an unfinished file starts again safely.
               </p>
             </div>
             {!!scan.data.activity?.length && (

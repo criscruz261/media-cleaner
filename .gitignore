@@ -44,6 +44,7 @@ pnpm-debug.log*
 diagnostics.jsonl*
 api-token
 .media-cleaner-quarantine/
+.media-cleaner-cache/
 
 # Local secrets; sanitized example configurations may be committed
 .env

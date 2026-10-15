@@ -535,6 +535,8 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                         )
                     )
             group.review_status = "reviewed"
+        for file_id in ids:
+            manager.save_folder_cache(group.scan_id, file_id)
         return {"saved": True}
 
     @app.post("/api/v1/cleanup/plan", status_code=201)

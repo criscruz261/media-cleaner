@@ -23,7 +23,10 @@ def discover(
             with os.scandir(directory) as entries:
                 for entry in entries:
                     checkpoint()
-                    if entry.is_symlink() or entry.name == ".media-cleaner-quarantine":
+                    if entry.is_symlink() or entry.name in {
+                        ".media-cleaner-quarantine",
+                        ".media-cleaner-cache",
+                    }:
                         continue
                     if not options["include_hidden"] and entry.name.startswith("."):
                         continue

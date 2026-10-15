@@ -56,6 +56,10 @@ class LiveMatcher:
         self.seen.add(file_id)
         file = self.session.get(File, file_id)
         self.session.refresh(file)
+        for choice in self.session.scalars(
+            select(FileReviewChoice).where(FileReviewChoice.file_id == file_id)
+        ):
+            self.saved_choices[(file_id, choice.classification)] = choice.keep
         if file.status != "ready":
             self.session.commit()
             return

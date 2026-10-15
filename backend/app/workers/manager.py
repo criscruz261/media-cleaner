@@ -1,16 +1,28 @@
 import logging
 import mimetypes
 import threading
+from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from pathlib import Path
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from app.core.filesystem import identity, stored_identity, protection, volume_key, IMAGE_EXTENSIONS
-from app.database.models import ScanJob, ScanRoot, Volume, File, MediaMetadata, FileHash, Fingerprint, now
+from app.database.models import (
+    ScanJob,
+    ScanRoot,
+    Volume,
+    File,
+    MediaMetadata,
+    FileHash,
+    Fingerprint,
+    FileReviewChoice,
+    now,
+)
 from app.hashing.sha256 import hash_file, ScanStopped
 from app.metadata.extract import extract
 from app.core.media_tools import executable
 from app.scanner.discovery import discover
+from app.scanner import folder_cache
 from app.grouping.live import LiveMatcher
 from app.similarity.images import fingerprint_image, ALGORITHM, VERSION
 from app.similarity import temporal
@@ -282,7 +294,8 @@ class JobManager:
             was_ready = file.status == "ready"
             was_processed = file.status in {"ready", "error"}
             media_type = file.media_type
-            similar = session.get(ScanJob, scan_id).options["mode"] == "similar"
+            options = session.get(ScanJob, scan_id).options
+            similar = options["mode"] == "similar"
             candidate = candidate or similar
             sequence = similar and temporal.temporal_kind(path, media_type)
             algorithm, version = (temporal.ALGORITHM, temporal.VERSION) if sequence else (ALGORITHM, VERSION)
@@ -300,12 +313,32 @@ class JobManager:
                 if similar
                 else None
             )
+        portable = folder_cache.read(path, options["roots"], key)
+        if portable:
+            if not cached:
+                cached = SimpleNamespace(
+                    digest=portable["digest"],
+                    metadata_fields=portable["fields"],
+                    metadata_warnings=portable["warnings"],
+                )
+            if similar and previous is None:
+                entry = next(
+                    (
+                        item
+                        for item in portable["fingerprints"]
+                        if item["algorithm"] == algorithm and item["version"] == version
+                    ),
+                    None,
+                )
+                if entry:
+                    previous = SimpleNamespace(value=entry["value"])
         try:
             if identity(path) != expected:
                 raise ValueError("File changed since discovery; start a new scan")
             if was_ready and (not candidate or file.sha256) and (not similar or previous is not None):
                 with self.sessions.begin() as session:
                     session.get(ScanJob, scan_id).updated_at = now()
+                self.save_folder_cache(scan_id, file_id)
                 return file_id
             self.update_activity(
                 scan_id,
@@ -396,6 +429,16 @@ class JobManager:
                                 value=descriptor,
                             )
                         )
+                if portable:
+                    for classification, keep in portable["choices"].items():
+                        if not session.get(FileReviewChoice, (file_id, classification)):
+                            session.add(
+                                FileReviewChoice(
+                                    file_id=file_id,
+                                    classification=classification,
+                                    keep=keep or bool(file.protected_reason),
+                                )
+                            )
                 old = session.get(MediaMetadata, file_id)
                 if old:
                     old.fields, old.warnings = fields, warnings
@@ -436,7 +479,46 @@ class JobManager:
                 job.updated_at = now()
         finally:
             self.clear_activity(scan_id, file_id)
+        self.save_folder_cache(scan_id, file_id)
         return file_id
+
+    def save_folder_cache(self, scan_id, file_id):
+        with self.lock, self.sessions() as session:
+            file = session.get(File, file_id)
+            if not file or file.status != "ready":
+                return
+            metadata = session.get(MediaMetadata, file_id)
+            job = session.get(ScanJob, scan_id)
+            try:
+                folder_cache.write(
+                    Path(file.path),
+                    job.options["roots"],
+                    stored_identity(file).key(file.path),
+                    {
+                        "digest": file.sha256,
+                        "fields": metadata.fields if metadata else {},
+                        "warnings": metadata.warnings if metadata else [],
+                        "fingerprints": [
+                            {"algorithm": item.algorithm, "version": item.version, "value": item.value}
+                            for item in session.scalars(
+                                select(Fingerprint).where(Fingerprint.file_id == file_id)
+                            )
+                        ],
+                        "choices": {
+                            item.classification: item.keep
+                            for item in session.scalars(
+                                select(FileReviewChoice).where(FileReviewChoice.file_id == file_id)
+                            )
+                        },
+                    },
+                )
+            except (OSError, ValueError) as exc:
+                log.warning("folder_cache_unavailable: %s", type(exc).__name__)
+                if metadata:
+                    warning = "Folder cache unavailable; checkpoints are still saved in the app database."
+                    if warning not in metadata.warnings:
+                        metadata.warnings = list(metadata.warnings) + [warning]
+                        session.commit()
 
     def close(self):
         self.shutdown_event.set()

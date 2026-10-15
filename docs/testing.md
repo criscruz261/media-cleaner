@@ -31,3 +31,5 @@ Video comparison controls are covered by a frontend test that loads multiple mem
 Thumbnail coverage verifies JPEG dimensions, unchanged-source cache reuse, and rejection after source changes. Completed Scanner coverage verifies visible keep checkboxes, group-scoped dry-run creation and no execution without confirmation. The Chrome video fixture checks real FFmpeg-generated posters and Scanner controls before the review/cleanup flow.
 
 Live cleanup regressions verify that quarantine during a running scan preserves remaining keep choices, skips moved files during resume, adds later matches, and keeps counters correct. Rebuilt groups restore choices for later-arriving members without overwriting a newer user choice.
+
+Folder-cache tests rebuild analysis and explicit selections using a fresh app database without hashing or decoding unchanged media; check corrupt entries and changed-identity rejection; and verify symlink cache paths neither get scanned nor receive writes outside the selected root.
