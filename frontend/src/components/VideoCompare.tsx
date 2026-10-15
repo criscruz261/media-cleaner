@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { api, prefix } from "../services/api";
 import type { Group, MediaFile } from "../types/api";
@@ -55,6 +55,20 @@ function Comparison({
       }
     },
   });
+  const client = useQueryClient();
+  const selection = useMutation({
+    mutationFn: ({ id, selected }: { id: string; selected: boolean }) =>
+      api(`/groups/${groupId}/review`, { changes: { [id]: !selected } }),
+    onSuccess: (_, { id, selected }) => {
+      client.setQueryData<MediaFile[]>(["compare-videos", groupId], (current) =>
+        current?.map((file) =>
+          file.id === id ? { ...file, keep: !selected } : file,
+        ),
+      );
+      void client.invalidateQueries({ queryKey: ["group", groupId] });
+      void client.invalidateQueries({ queryKey: ["compare-videos", groupId] });
+    },
+  });
   const videos = () =>
     Array.from(panel.current?.querySelectorAll("video") ?? []);
   useEffect(() => {
@@ -65,7 +79,7 @@ function Comparison({
       if (event.key === "Tab") {
         const focusable = Array.from(
           element?.querySelectorAll<HTMLElement>(
-            "button:not(:disabled), video, a[href]",
+            "button:not(:disabled), input:not(:disabled), video, a[href]",
           ) ?? [],
         );
         const first = focusable[0],
@@ -152,10 +166,37 @@ function Comparison({
         {files.data && !allReady && playable.length > 0 && (
           <p role="status">Preparing videos for playback…</p>
         )}
-        <ErrorMessage error={files.error || error} />
+        <p className="hint">
+          Select unwanted videos for deletion. Selections are saved to the
+          group; close this window to review and confirm cleanup. Unselected
+          videos are kept.
+        </p>
+        <ErrorMessage error={files.error || selection.error || error} />
         <div className="media-grid">
           {files.data?.map((file) => (
             <div className="media-card" key={file.id}>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${file.name} for deletion`}
+                  checked={!file.keep}
+                  disabled={
+                    selection.isPending ||
+                    !!file.protected_reason ||
+                    file.status !== "ready"
+                  }
+                  onChange={(event) =>
+                    selection.mutate({
+                      id: file.id,
+                      selected: event.target.checked,
+                    })
+                  }
+                />
+                Select for deletion
+              </label>
+              {file.protected_reason && (
+                <p className="protected">{file.protected_reason}</p>
+              )}
               <strong className="filename">{file.name}</strong>
               <video
                 controls

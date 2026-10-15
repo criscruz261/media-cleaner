@@ -61,3 +61,80 @@ it("loads all group pages and controls every video together", async () => {
     vi.unstubAllGlobals();
   }
 });
+
+it("saves video selections to the group and protects protected files", async () => {
+  let selected = false;
+  const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith("/review"))
+      selected = !JSON.parse(options!.body as string).changes.one;
+    return {
+      ok: true,
+      json: async () => ({
+        member_count: 2,
+        files: [
+          {
+            id: "one",
+            name: "one.mp4",
+            media_type: "video",
+            keep: !selected,
+            status: "ready",
+            protected_reason: null,
+          },
+          {
+            id: "two",
+            name: "two.mp4",
+            media_type: "video",
+            keep: true,
+            status: "ready",
+            protected_reason: "Protected directory",
+          },
+        ],
+      }),
+    };
+  });
+  vi.stubGlobal("fetch", fetch);
+  const pause = vi
+    .spyOn(HTMLMediaElement.prototype, "pause")
+    .mockImplementation(() => {});
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.setQueryData(["group", "group", 0], { files: [] });
+  try {
+    render(
+      <QueryClientProvider client={client}>
+        <VideoCompare groupId="group" />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Compare videos together" }),
+    );
+    const checkbox = await screen.findByRole("checkbox", {
+      name: "Select one.mp4 for deletion",
+    });
+    expect(checkbox).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Select two.mp4 for deletion" }),
+    ).toBeDisabled();
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(checkbox).toBeChecked());
+    expect(
+      JSON.parse(
+        fetch.mock.calls.find(([url]) => url.endsWith("/review"))![1]!
+          .body as string,
+      ),
+    ).toEqual({ changes: { one: false } });
+    expect(client.getQueryState(["group", "group", 0])!.isInvalidated).toBe(
+      true,
+    );
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(checkbox).not.toBeChecked());
+    expect(
+      fetch.mock.calls.some(([url]) => url.includes("/cleanup/execute")),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Close comparison" }));
+  } finally {
+    pause.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
