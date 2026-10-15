@@ -81,6 +81,41 @@ try {
     for (const box of await boxes.all())
       if (!(await box.isChecked()))
         throw new Error("Similar videos must all start kept");
+    await group
+      .getByRole("button", { name: "Compare videos together" })
+      .click();
+    const comparison = page.getByRole("dialog", {
+      name: "Compare similar videos",
+    });
+    await comparison
+      .getByRole("button", { name: "Play all from start" })
+      .click();
+    await page.waitForFunction(() => {
+      const players = [
+        ...document.querySelectorAll(".video-compare-modal video"),
+      ];
+      return (
+        players.length === 2 &&
+        players.every((video) => video.currentTime > 0 && !video.paused)
+      );
+    });
+    await comparison.getByRole("button", { name: "Pause all" }).click();
+    if (
+      !(await comparison
+        .locator("video")
+        .evaluateAll((players) => players.every((video) => video.paused)))
+    )
+      throw new Error("Pause all did not pause every video");
+    await comparison.getByRole("button", { name: "Reset all" }).click();
+    if (
+      !(await comparison
+        .locator("video")
+        .evaluateAll((players) =>
+          players.every((video) => video.currentTime === 0),
+        ))
+    )
+      throw new Error("Reset all did not reset every video");
+    await comparison.getByRole("button", { name: "Close comparison" }).click();
     const video = group.locator("video").first();
     await video.evaluate(async (element) => {
       element.muted = true;

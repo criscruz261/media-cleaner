@@ -1,3 +1,4 @@
+import { VideoCompare } from "./VideoCompare";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers3, ShieldCheck, ArrowRight } from "lucide-react";
@@ -106,6 +107,9 @@ function LiveMatch({ group, running }: { group: Group; running: boolean }) {
             : "Manual review required"}
         </span>
       </div>
+      {detail.data?.files.some((file) => file.media_type === "video") && (
+        <VideoCompare groupId={group.id} />
+      )}
       <div className="media-grid">
         {detail.data?.files.map((file) => (
           <div className="media-card" key={file.id}>

@@ -1,3 +1,4 @@
+import { VideoCompare } from "../components/VideoCompare";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldCheck, ArrowRight, Layers3 } from "lucide-react";
@@ -152,6 +153,9 @@ function GroupCard({
         </div>
         <strong>{bytes(group.recoverable)} potential</strong>
       </div>
+      {detail.data?.files.some((file) => file.media_type === "video") && (
+        <VideoCompare groupId={group.id} />
+      )}
       <p className="recommendation">{group.recommendation}</p>
       <details className="evidence">
         <summary>
