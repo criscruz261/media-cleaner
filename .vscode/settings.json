@@ -1,10 +1,10 @@
 {
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv-phase1/bin/python",
     "python.analysis.extraPaths": [
-        "./backend"
+        "./apps/desktop/backend"
     ],
     "python.testing.pytestEnabled": true,
-    "python.testing.cwd": "${workspaceFolder}/backend",
+    "python.testing.cwd": "${workspaceFolder}/apps/desktop/backend",
     "python.testing.pytestArgs": [
         "tests"
     ],

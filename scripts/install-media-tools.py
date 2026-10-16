@@ -1,10 +1,5 @@
-"""Explicit setup-time download; runtime media scanning never downloads tools."""
+"""Compatibility entry point for desktop tooling."""
+from pathlib import Path
+import runpy
 
-import shutil
-from static_ffmpeg import run
-
-if shutil.which("ffmpeg") and shutil.which("ffprobe"):
-    print("FFmpeg and FFprobe already available on PATH.")
-else:
-    ffmpeg, ffprobe = run.get_or_fetch_platform_executables_else_raise()
-    print(f"Installed FFmpeg: {ffmpeg}\nInstalled FFprobe: {ffprobe}")
+runpy.run_path(str(Path(__file__).resolve().parents[1] / "apps/desktop/scripts/install-media-tools.py"), run_name="__main__")
