@@ -14,6 +14,10 @@ The project-local Python environment and production frontend have been prepared:
 
 Open the launch link printed in the terminal. It includes a local access token in the URL fragment, which is removed after connecting and exchanged for an HttpOnly, SameSite cookie. Do not share the launch link. Stop with Ctrl+C. Use `./run.sh --port 9000` or `./run.sh --data-dir /absolute/local/app-data` to override defaults.
 
+## Android build
+
+A standalone Android 11+ app is available under [apps/android](apps/android/README.md), with native media access, offline scanning, thumbnails, video comparison, saved checkpoints and system-confirmed Trash/restore. Run `./apps/android/scripts/build.sh` with JDK 21 and Android SDK 35 configured. The installable debug APK is generated at `apps/android/app/build/outputs/apk/debug/app-debug.apk`. This is a testing build, not a Play Store release.
+
 ## Fresh development setup
 
 Install **Python 3.12+** and **Node 22.12+** (Node 22 LTS is the tested development runtime). Network access is needed for installation, not for normal operation.
@@ -76,15 +80,16 @@ apps/
       windows/             Windows-specific PowerShell setup and launch
       linux/
     packaging/             Desktop installer strategy
-  android/                 Separate Android app boundary (not implemented yet)
+  android/                 Standalone native Android app and APK build
 shared/
   contracts/src/api.ts     Common data types consumed by the desktop UI
+  matching/                Platform-independent Java matching core for Android
 scripts/                   Root compatibility launchers and toolchain helpers
 docs/                      Project-wide documentation
 legacy/                    Archived earlier PhotoFold implementation
 ```
 
-Use [apps/desktop](apps/desktop/README.md) for the current app, [apps/android](apps/android/README.md) for Android-specific work, and [shared](shared/README.md) for cross-application definitions. Windows will use the same desktop backend/frontend with Windows-specific adapters and packaging. Android source and installers have not been implemented by this repository reorganization.
+Use [apps/desktop](apps/desktop/README.md) for the current app, [apps/android](apps/android/README.md) for Android-specific work, and [shared](shared/README.md) for cross-application definitions. Windows will use the same desktop backend/frontend with Windows-specific adapters and packaging. The Android app now builds separately; desktop installers remain future work.
 
 Root `./run.sh`, `./scripts/setup.sh`, `./scripts/check.sh`, and PowerShell entry points continue to work. Existing checkouts should rerun setup once after this move to refresh the editable Python installation. See [repository boundaries](docs/repository-layout.md).
 

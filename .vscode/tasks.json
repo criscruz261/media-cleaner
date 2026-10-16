@@ -1,1 +1,35 @@
-{"version":"2.0.0","tasks":[{"label":"Media Cleaner: run","type":"shell","command":"./run.sh","windows":{"command":"powershell -ExecutionPolicy Bypass -File scripts/run.ps1"},"problemMatcher":[]},{"label":"Media Cleaner: frontend dev","type":"shell","command":"npm run dev --prefix apps/desktop/frontend","problemMatcher":[]},{"label":"Media Cleaner: checks","type":"shell","command":"./scripts/check.sh","problemMatcher":[]}]}
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Media Cleaner: run",
+      "type": "shell",
+      "command": "./run.sh",
+      "windows": {
+        "command": "powershell -ExecutionPolicy Bypass -File scripts/run.ps1"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Media Cleaner: frontend dev",
+      "type": "shell",
+      "command": "npm run dev --prefix apps/desktop/frontend",
+      "problemMatcher": []
+    },
+    {
+      "label": "Media Cleaner: checks",
+      "type": "shell",
+      "command": "./scripts/check.sh",
+      "problemMatcher": []
+    },
+    {
+      "label": "Media Cleaner: Android build",
+      "type": "shell",
+      "command": "./apps/android/scripts/build.sh",
+      "windows": {
+        "command": ".\\apps\\android\\gradlew.bat -p apps/android :matching:test :app:assembleDebug :app:lintDebug"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -72,3 +72,6 @@ Desktop.ini
 *.aab
 *.jks
 *.keystore
+
+# Shared JVM matching module outputs
+/shared/matching/build/
