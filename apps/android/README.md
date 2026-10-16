@@ -19,7 +19,7 @@ Open this directory in Android Studio, using **JDK 21**, SDK platform **35**, an
 From the repository root on macOS/Linux, with `JAVA_HOME` and `ANDROID_HOME` set (or the local tools below installed):
 
 ```sh
-./apps/android/scripts/build.sh
+./build-android.sh
 ```
 
 Or from this directory, including Windows:
@@ -31,7 +31,18 @@ Or from this directory, including Windows:
 
 Output: `app/build/outputs/apk/debug/app-debug.apk`. This is an installable **debug/testing build**, not a signed Play Store release. Release signing/distribution and current store submission requirements are separate work. The local debug signing key is ignored; keep it if you want to update an installed debug app without uninstalling.
 
-Optional macOS ARM64 bootstrap (Python 3.12+ and curl): `python3 apps/android/scripts/setup-tools.py` from the root. **Run it only after reviewing and agreeing to Google's Android SDK license**: the script accepts licenses for the requested packages and installs checksum-verified JDK/Gradle/SDK tools plus a test emulator under ignored `.tools/android`. It downloads several GB. Other hosts can use Android Studio's SDK manager instead. No build tools are downloaded at app runtime.
+For a fresh clone on **macOS Apple Silicon**, install **Python 3.12+** and **curl**, then run from the repository root:
+
+```sh
+./setup-android.sh
+./build-android.sh
+```
+
+Setup downloads checksum-verified JDK 21 and Android SDK 35 into ignored `.tools/android`, reuses existing downloads and installed components, and prompts for Google's SDK licenses when needed. No desktop setup, Android Studio or shell profile changes are required. The checked-in Gradle wrapper downloads its pinned distribution on the first build. Internet access is required for initial tools and build dependencies. Other hosts should install JDK 21 and Android SDK 35 manually and set `JAVA_HOME` and `ANDROID_HOME`.
+
+`./setup-andriod.sh` is an alias for the requested spelling. Use `./setup-android.sh --accept-licenses` only after agreeing to [Google's SDK license](https://developer.android.com/studio#terms-and-conditions). Add `--emulator` to also download the optional Android 35 ARM64 emulator/system image (several GB); it is not required to build an APK. `PYTHON=/path/to/python3.12` can select the bootstrap interpreter.
+
+The root build runs matching tests, APK compilation and Android lint, then copies the APK and SHA-256 checksum to `.tools/dist/media-cleaner-android-debug.apk` and `.tools/dist/media-cleaner-android-debug.apk.sha256`. It accepts Gradle options, for example `./build-android.sh --offline` after dependencies have been downloaded. Both root scripts work when called from another directory. Downloaded tools, build caches and APKs are ignored by Git; a new clone downloads them again. No build tools are downloaded at app runtime.
 
 ## Boundaries and matching
 

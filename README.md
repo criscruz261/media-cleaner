@@ -16,7 +16,7 @@ Open the launch link printed in the terminal. It includes a local access token i
 
 ## Android build
 
-A standalone Android 11+ app is available under [apps/android](apps/android/README.md), with native media access, offline scanning, thumbnails, video comparison, saved checkpoints and system-confirmed Trash/restore. Run `./apps/android/scripts/build.sh` with JDK 21 and Android SDK 35 configured. The installable debug APK is generated at `apps/android/app/build/outputs/apk/debug/app-debug.apk`. This is a testing build, not a Play Store release.
+A standalone Android 11+ app is available under [apps/android](apps/android/README.md), with native media access, offline scanning, thumbnails, video comparison, saved checkpoints and system-confirmed Trash/restore. On a fresh macOS Apple Silicon clone, install Python 3.12+ and curl, then run `./setup-android.sh` and `./build-android.sh`. Setup keeps its tools in ignored `.tools/android`; the build finds them automatically. Other hosts can configure JDK 21 and Android SDK 35 manually before running the build script. The installable debug APK is generated at `apps/android/app/build/outputs/apk/debug/app-debug.apk`. This is a testing build, not a Play Store release.
 
 ## Fresh development setup
 
