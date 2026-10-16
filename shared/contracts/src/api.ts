@@ -1,0 +1,91 @@
+export type Page<T> = { items: T[]; total: number };
+export type Scan = {
+  id: string;
+  status: string;
+  stage: string;
+  discovered: number;
+  processed: number;
+  bytes_processed: number;
+  total_bytes?: number;
+  checkpoint_at?: string;
+  activity?: {
+    path: string;
+    phase: string;
+    bytes_done: number;
+    size: number;
+    frames_done: number;
+    frames_total: number;
+  }[];
+  cache_hits: number;
+  errors: number;
+  error: string | null;
+  created_at: string;
+  options: { roots: string[] };
+};
+export type MediaFile = {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  sha256: string;
+  status: string;
+  media_type: "image" | "video";
+  keep: boolean;
+  protected_reason: string | null;
+  metadata: Record<string, unknown>;
+  warnings: string[];
+};
+export type Group = {
+  id: string;
+  scan_id: string;
+  classification: string;
+  evidence: {
+    sha256?: string;
+    algorithm: string;
+    max_phash_distance?: number;
+    max_dhash_distance?: number;
+    phash_limit?: number;
+    dhash_limit?: number;
+    note?: string;
+    media_kind?: string;
+    sample_count?: number;
+    minimum_matched_samples?: number;
+    max_duration_difference_seconds?: number;
+    member_kinds?: string[];
+  };
+  recommendation: string;
+  recommended_id: string | null;
+  recoverable: number;
+  member_count: number;
+  review_status: string;
+  files?: MediaFile[];
+};
+export type CleanupItem = {
+  file_id: string;
+  source: string;
+  keeper: string | null;
+  classification?: string;
+  size: number;
+  status: string;
+  quarantine_path: string | null;
+  error: string | null;
+};
+export type Cleanup = {
+  id: string;
+  status: string;
+  token: string;
+  destination: "trash" | "quarantine";
+  items: CleanupItem[];
+  total_bytes: number;
+  created_at: string;
+  expires_at: string;
+};
+export type Settings = {
+  protected_directories: string[];
+  excluded_directories: string[];
+  excluded_extensions: string[];
+  include_hidden: boolean;
+  concurrency: number;
+  cleanup_destination: "trash" | "quarantine";
+  theme: "system" | "light" | "dark";
+};

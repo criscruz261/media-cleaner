@@ -1,6 +1,6 @@
 # Dependencies and platforms
 
-Python dependencies are pinned in `backend/requirements-dev.lock`; frontend dependencies are pinned in `frontend/package-lock.json`. Source-compatible ranges live in pyproject/package.json. The local validation environment uses Python 3.12 and Node 22. Setup requires internet access to acquire dependencies. Normal analysis, previews and cleanup run locally without an account or network service.
+Python dependencies are pinned in `apps/desktop/backend/requirements-dev.lock`; frontend dependencies are pinned in `apps/desktop/frontend/package-lock.json`. Source-compatible ranges live in pyproject/package.json. The local validation environment uses Python 3.12 and Node 22. Setup requires internet access to acquire dependencies. Normal analysis, previews and cleanup run locally without an account or network service.
 
 | Dependency | Current use | Missing-tool behavior |
 | --- | --- | --- |

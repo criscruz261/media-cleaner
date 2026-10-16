@@ -14,6 +14,10 @@ The project-local Python environment and production frontend have been prepared:
 
 Open the launch link printed in the terminal. It includes a local access token in the URL fragment, which is removed after connecting and exchanged for an HttpOnly, SameSite cookie. Do not share the launch link. Stop with Ctrl+C. Use `./run.sh --port 9000` or `./run.sh --data-dir /absolute/local/app-data` to override defaults.
 
+## Android build
+
+A standalone Android 11+ app is available under [apps/android](apps/android/README.md), with native media access, offline scanning, thumbnails, video comparison, saved checkpoints and system-confirmed Trash/restore. On a fresh macOS Apple Silicon clone, install Python 3.12+ and curl, then run `./setup-android.sh` and `./build-android.sh`. Setup keeps its tools in ignored `.tools/android`; the build finds them automatically. Other hosts can configure JDK 21 and Android SDK 35 manually before running the build script. The installable debug APK is generated at `apps/android/app/build/outputs/apk/debug/app-debug.apk`. This is a testing build, not a Play Store release.
+
 ## Fresh development setup
 
 Install **Python 3.12+** and **Node 22.12+** (Node 22 LTS is the tested development runtime). Network access is needed for installation, not for normal operation.
@@ -34,7 +38,7 @@ Windows PowerShell:
 ./scripts/run.ps1
 ```
 
-Setup installs the pinned Python dependencies, the editable backend, frontend dependencies from package-lock.json, a production frontend build, and setup-time FFmpeg/FFprobe installation when missing. For frontend development, run the backend in one terminal and `npm run dev --prefix frontend` in another; visit the Vite URL and paste the backend's launch token. Vite proxies `/api` to port 8765. VS Code tasks and pytest settings are included.
+Setup installs the pinned Python dependencies, the editable backend, frontend dependencies from package-lock.json, a production frontend build, and setup-time FFmpeg/FFprobe installation when missing. For frontend development, run the backend in one terminal and `npm run dev --prefix apps/desktop/frontend` in another; visit the Vite URL and paste the backend's launch token. Vite proxies `/api` to port 8765. VS Code tasks and pytest settings are included.
 
 FFmpeg/FFprobe are installed during setup or can be provided on PATH. ExifTool is optional for richer metadata. Scanning never downloads tools. See [dependencies](docs/dependencies.md). Missing tools and skipped comparisons are shown in Settings and the scanner’s paginated warnings list. Exact hashing works without them. Native folder dialogs use macOS AppleScript, Windows FolderBrowserDialog, or Linux Zenity/KDialog; paste paths when a dialog is unavailable.
 
@@ -54,24 +58,40 @@ Cleanup is conservative: files and retained copies must still match their record
 ```sh
 ./scripts/check.sh
 # Or independently:
-cd backend
-../.venv-phase1/bin/python -m pytest
+cd apps/desktop/backend
+../../../.venv-phase1/bin/python -m pytest
 # From the project root:
-npm test --prefix frontend
-npm run build --prefix frontend
+npm test --prefix apps/desktop/frontend
+npm run build --prefix apps/desktop/frontend
 ```
 
 All cleanup tests use temporary synthetic media. The local browser smoke script additionally exercises the real UI and real backend against temporary media; see [testing](docs/testing.md). Windows and Linux scripts are supplied but have not been run on those operating systems in this workspace. No 100,000-file benchmark or installer certification is claimed.
 
 ## Layout
 
-- `backend/app/`: API, core filesystem/security, discovery, metadata, hashing, grouping, retention, cleanup, database and managed workers.
-- `backend/migrations/`: versioned Alembic migrations, automatically applied at startup.
-- `backend/tests/`: unit, API, persistence, worker and cleanup safety tests.
-- `frontend/src/`: real React pages, shared components, typed API client and SSE hook.
-- `scripts/`: setup, launch, verification and test tooling.
-- `desktop/`: release strategy documentation; no Phase 5 desktop shell is claimed.
-- `legacy/`: preserved earlier PhotoFold implementation and tests, isolated from the Phase 1 entry point.
+```text
+apps/
+  desktop/                 Existing macOS/Windows/Linux app
+    backend/               Python service, migrations and tests
+    frontend/              React desktop interface and tests
+    scripts/               Desktop development and verification tools
+    platforms/
+      macos/
+      windows/             Windows-specific PowerShell setup and launch
+      linux/
+    packaging/             Desktop installer strategy
+  android/                 Standalone native Android app and APK build
+shared/
+  contracts/src/api.ts     Common data types consumed by the desktop UI
+  matching/                Platform-independent Java matching core for Android
+scripts/                   Root compatibility launchers and toolchain helpers
+docs/                      Project-wide documentation
+legacy/                    Archived earlier PhotoFold implementation
+```
+
+Use [apps/desktop](apps/desktop/README.md) for the current app, [apps/android](apps/android/README.md) for Android-specific work, and [shared](shared/README.md) for cross-application definitions. Windows will use the same desktop backend/frontend with Windows-specific adapters and packaging. The Android app now builds separately; desktop installers remain future work.
+
+Root `./run.sh`, `./scripts/setup.sh`, `./scripts/check.sh`, and PowerShell entry points continue to work. Existing checkouts should rerun setup once after this move to refresh the editable Python installation. See [repository boundaries](docs/repository-layout.md).
 
 Folder-local analysis checkpoints live under `<selected folder>/.media-cleaner-cache/`. Rescanning the same folder can reuse them even with a fresh app database. Changed file identities are reprocessed. Unwritable folders fall back to the app database with a scanner warning. The cache is not a backup of media or cleanup history.
 
