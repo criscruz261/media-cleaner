@@ -518,8 +518,8 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 raise ValueError("Changed files must belong to this group")
             for file_id, keep in value.changes.items():
                 keep_ids.add(file_id) if keep else keep_ids.discard(file_id)
-            if not keep_ids or not keep_ids <= ids:
-                raise ValueError("Keep at least one file, and keep IDs must belong to this group")
+            if not keep_ids <= ids:
+                raise ValueError("Keep IDs must belong to this group")
             for member in members:
                 file = session.get(File, member.file_id)
                 if file.protected_reason and member.file_id not in keep_ids:

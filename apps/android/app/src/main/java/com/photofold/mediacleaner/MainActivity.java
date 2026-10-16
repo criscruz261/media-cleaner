@@ -413,6 +413,20 @@ public final class MainActivity extends Activity {
                   members,
                   "Showing first 50 files. Video comparison pages through the full video group.");
           });
+    Button selectAll =
+        button(
+            card,
+            "Select all for deletion (keep none)",
+            () -> {
+              try {
+                store.selectAll(group.id());
+                stamp = "";
+                refresh();
+              } catch (Exception failure) {
+                message(failure.getMessage());
+              }
+            });
+    selectAll.setEnabled(!cleanupBusy);
     long selected = group.files().stream().filter(file -> !store.keep(group, file)).count();
     Button delete = button(card, "Delete selected (" + selected + ")", () -> preview(group.id()));
     delete.setContentDescription(
@@ -642,7 +656,7 @@ public final class MainActivity extends Activity {
                 group.files().stream()
                     .filter(file -> store.keep(group, file))
                     .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Keep at least one file."));
+                    .orElse(null);
             if (selected.isEmpty() || selected.size() > 100)
               throw new IllegalArgumentException("Choose 1–100 files per cleanup.");
             List<Media> current = MediaRepository.discover(this, store.meta("album", ""), () -> {});
@@ -654,7 +668,7 @@ public final class MainActivity extends Activity {
                 throw new IllegalArgumentException(
                     "Protected media cannot be removed: " + file.name);
               if (!MediaRepository.unchanged(this, file)
-                  || !MediaRepository.unchanged(this, keeper))
+                  || (keeper != null && !MediaRepository.unchanged(this, keeper)))
                 throw new IllegalArgumentException(
                     "Selected or retained media changed. Rescan first.");
               items.put(
@@ -663,9 +677,9 @@ public final class MainActivity extends Activity {
                       .put("name", file.name)
                       .put("identity", file.identity)
                       .put("digest", file.digest)
-                      .put("keeper", keeper.uri)
-                      .put("keeperIdentity", keeper.identity)
-                      .put("keeperDigest", keeper.digest));
+                      .put("keeper", keeper == null ? "" : keeper.uri)
+                      .put("keeperIdentity", keeper == null ? "" : keeper.identity)
+                      .put("keeperDigest", keeper == null ? "" : keeper.digest));
             }
             JSONObject plan =
                 new JSONObject()
@@ -709,12 +723,17 @@ public final class MainActivity extends Activity {
           "These files are visually similar; they may contain different moments or audio. Compare"
               + " full playback before confirming.");
     for (int i = 0; i < items.length(); i++) label(body, items.optJSONObject(i).optString("name"));
+    String keeperUri = items.optJSONObject(0).optString("keeper");
+    Media retained = keeperUri.isEmpty() ? null : store.file(keeperUri);
     label(
         body,
-        "Retained: "
-            + store.file(items.optJSONObject(0).optString("keeper")).name
-            + ". Both selected and retained files will be freshly hashed before Android"
-            + " confirmation.");
+        retained == null
+            ? "Keep none: every selected file will move to Trash. No copy will remain in this"
+                  + " group."
+            : "Retained: "
+                + retained.name
+                + ". Selected and retained files will be freshly hashed before Android"
+                + " confirmation.");
     CheckBox confirmed = new CheckBox(this);
     confirmed.setText("I reviewed these files and want to move them to Trash");
     body.addView(confirmed);
@@ -739,7 +758,7 @@ public final class MainActivity extends Activity {
   }
 
   private void validateAndTrash(JSONObject plan) {
-    activity.setText("Verifying selected and retained contents before cleanup…");
+    activity.setText("Verifying media contents before cleanup…");
     io.submit(
         () -> {
           try {
@@ -763,9 +782,9 @@ public final class MainActivity extends Activity {
               Media selected = store.file(item.getString("uri")),
                   keeper = store.file(item.getString("keeper"));
               if (selected == null
-                  || keeper == null
+                  || (!item.getString("keeper").isEmpty() && keeper == null)
                   || !selected.identity.equals(item.getString("identity"))
-                  || !keeper.identity.equals(item.getString("keeperIdentity")))
+                  || (keeper != null && !keeper.identity.equals(item.getString("keeperIdentity"))))
                 throw new IllegalArgumentException(
                     "Media identity changed. Rescan before cleanup.");
               notCancelled.run();
@@ -775,9 +794,14 @@ public final class MainActivity extends Activity {
                           file -> file.uri.equals(selected.uri) && !file.protection.isEmpty()))
                 throw new IllegalArgumentException("A selected file is protected. Rescan first.");
               Store.Group group = store.group(plan.getString("group"));
-              if (group == null || store.keep(group, selected) || !store.keep(group, keeper))
+              if (group == null
+                  || group.files().stream().noneMatch(file -> file.uri.equals(selected.uri))
+                  || store.keep(group, selected)
+                  || (keeper != null
+                      ? !store.keep(group, keeper)
+                      : group.files().stream().anyMatch(file -> store.keep(group, file))))
                 throw new IllegalArgumentException("Keep choices changed. Create a new preview.");
-              for (Media file : List.of(selected, keeper))
+              for (Media file : keeper == null ? List.of(selected) : List.of(selected, keeper))
                 if (verified.add(file.uri)) {
                   String digest = MediaRepository.hash(this, file, notCancelled, ignored -> {});
                   String expected =

@@ -12,7 +12,7 @@ class ScanRequest(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    keep_ids: list[str] | None = Field(default=None, min_length=1, max_length=10000)
+    keep_ids: list[str] | None = Field(default=None, max_length=10000)
     changes: dict[str, bool] = Field(default_factory=dict, max_length=200)
 
 

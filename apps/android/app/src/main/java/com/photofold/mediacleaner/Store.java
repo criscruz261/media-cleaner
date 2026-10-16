@@ -220,9 +220,6 @@ final class Store extends SQLiteOpenHelper {
     Media file =
         group.files.stream().filter(item -> item.uri.equals(uri)).findFirst().orElseThrow();
     if (selected && !file.protection.isEmpty()) throw new IllegalArgumentException(file.protection);
-    if (selected
-        && group.files.stream().noneMatch(item -> !item.uri.equals(uri) && keep(group, item)))
-      throw new IllegalArgumentException("Keep at least one file in this group.");
     ContentValues values = new ContentValues();
     values.put("uri", uri);
     values.put("identity", file.identity);
@@ -231,6 +228,22 @@ final class Store extends SQLiteOpenHelper {
     getWritableDatabase()
         .insertWithOnConflict("choices", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     touch();
+  }
+
+  synchronized void selectAll(String groupId) {
+    Group group = group(groupId);
+    if (group == null) throw new IllegalArgumentException("Group changed. Reopen review.");
+    if (group.files.stream().anyMatch(file -> !file.protection.isEmpty()))
+      throw new IllegalArgumentException(
+          "This group contains protected media. Protected files must be kept.");
+    SQLiteDatabase db = getWritableDatabase();
+    db.beginTransaction();
+    try {
+      for (Media file : group.files) select(groupId, file.uri, true);
+      db.setTransactionSuccessful();
+    } finally {
+      db.endTransaction();
+    }
   }
 
   synchronized void operation(JSONObject data) throws JSONException {

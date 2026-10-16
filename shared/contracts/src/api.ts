@@ -63,7 +63,7 @@ export type Group = {
 export type CleanupItem = {
   file_id: string;
   source: string;
-  keeper: string;
+  keeper: string | null;
   classification?: string;
   size: number;
   status: string;

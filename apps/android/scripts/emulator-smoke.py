@@ -178,6 +178,26 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
                 "-d",
                 "file://" + quote(gallery + "/" + file.name),
             )
+    # Media scanner broadcasts are asynchronous, especially just after emulator boot.
+    expected = {file.name for file in temp.iterdir() if file.is_file()}
+    deadline = time.monotonic() + 30
+    while True:
+        indexed = adb(
+            "shell",
+            "content",
+            "query",
+            "--uri",
+            "content://media/external/file",
+            "--projection",
+            "_display_name",
+        )
+        if all(name in indexed for name in expected):
+            break
+        if time.monotonic() >= deadline:
+            raise AssertionError(
+                "Synthetic gallery fixtures were not indexed by MediaStore"
+            )
+        time.sleep(0.5)
     print("Scanning real synthetic photos and videos", flush=True)
     launch(scan=True)
     find("Scan complete.", timeout=180)
@@ -222,16 +242,19 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     tap(find("Pause all"))
     tap(find("Select clip-reencoded.mp4 for deletion"))
     tap(find("Select clip-original.mp4 for deletion"))
-    find("Keep at least one file")
-    tap(find("OK"))
     tap(find("Close comparison", scroll=True, timeout=25))
-    tap(find("Delete selected videos (1)", scroll=True, timeout=35))
+    tap(find("Delete selected videos (2)", scroll=True, timeout=35))
+    find("Keep none: every selected file")
+    assert find("Continue to Android confirmation").get("enabled") == "false"
+    tap(find("Cancel"))
+    tap(find("Select all for deletion (keep none)", scroll=True, timeout=35))
+    tap(find("Delete selected videos (2)", scroll=True, timeout=35))
     print("Checking app and Android cleanup confirmations", flush=True)
     confirm = find("Continue to Android confirmation")
     assert confirm.get("enabled") == "false", "Cleanup confirmation was bypassed"
     screenshot("cleanup-preview.png")
     tap(find("Cancel"))
-    tap(find("Delete selected videos (1)", scroll=True, timeout=35))
+    tap(find("Delete selected videos (2)", scroll=True, timeout=35))
     find("Confirm group cleanup")
     tap(find("I reviewed these files"))
     tap(find("Continue to Android confirmation"))
@@ -247,13 +270,14 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     tap(find("Allow", timeout=20, button=True))
     find("trashed ·", scroll=True, timeout=30)
     assert "clip-reencoded.mp4" not in adb("shell", "ls", gallery).splitlines()
-    assert "clip-original.mp4" in adb("shell", "ls", gallery).splitlines()
+    assert "clip-original.mp4" not in adb("shell", "ls", gallery).splitlines()
     screenshot("cleanup-history.png")
     tap(find("Restore from Trash"))
     tap(find("Continue"))
     tap(find("Allow", timeout=20, button=True))
     find("restored ·", scroll=True, timeout=30)
     assert "clip-reencoded.mp4" in adb("shell", "ls", gallery).splitlines()
+    assert "clip-original.mp4" in adb("shell", "ls", gallery).splitlines()
     screenshot("restored.png")
 print(
     "Android emulator smoke passed: real photo/video matching, saved checkpoints, comparison selections, explicit confirmation, Android Trash, restore."

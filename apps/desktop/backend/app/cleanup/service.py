@@ -61,17 +61,23 @@ class CleanupService:
                     File.id.not_in(ids),
                 )
             ).all()
-            if not keepers:
-                raise ValueError("Keep at least one verified file in every group")
+            kept_members = session.scalar(
+                select(GroupMember.file_id)
+                .where(GroupMember.group_id == member.group_id, GroupMember.keep.is_(True))
+                .limit(1)
+            )
+            remove_all = group_id is not None and group.review_status == "reviewed" and kept_members is None
+            if not keepers and not remove_all:
+                raise ValueError("Keep a verified file or explicitly review this group to keep none")
             keeper = next(
                 (candidate for candidate in keepers if approximate or candidate.sha256 == file.sha256), None
             )
-            if not keeper or identity(Path(keeper.path)) != stored_identity(keeper):
+            if not remove_all and (not keeper or identity(Path(keeper.path)) != stored_identity(keeper)):
                 raise ValueError("Retained copy is missing or changed; scan again")
             if rehash:
                 if hash_file(path, stored_identity(file)) != file.sha256:
                     raise ValueError("Selected file content changed")
-                if hash_file(Path(keeper.path), stored_identity(keeper)) != keeper.sha256:
+                if keeper and hash_file(Path(keeper.path), stored_identity(keeper)) != keeper.sha256:
                     raise ValueError("Retained file content changed")
             items.append(
                 {
@@ -79,10 +85,10 @@ class CleanupService:
                     "source": file.path,
                     "size": file.size,
                     "sha256": file.sha256,
-                    "keeper_id": keeper.id,
+                    "keeper_id": keeper.id if keeper else None,
                     "group_id": member.group_id,
                     "classification": group.classification,
-                    "keeper": keeper.path,
+                    "keeper": keeper.path if keeper else None,
                     "status": "planned",
                     "quarantine_path": None,
                     "error": None,

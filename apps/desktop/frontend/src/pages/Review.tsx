@@ -132,17 +132,33 @@ export function GroupCard({
     onSuccess: () =>
       client.invalidateQueries({ queryKey: ["group", group.id] }),
   });
+  const selectAll = useMutation({
+    mutationFn: () => api(`/groups/${group.id}/review`, { keep_ids: [] }),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["group", group.id] }),
+  });
   const eligible =
     detail.data?.files.filter(
       (file) => !file.keep && file.status === "ready",
     ) ?? [];
   const plan = useMutation({
-    mutationFn: () =>
-      api<Cleanup>("/cleanup/plan", {
-        file_ids: eligible.map((file) => file.id),
+    mutationFn: async () => {
+      const files = [];
+      for (let start = 0; ; start += 200) {
+        const page = await api<Group & { files: NonNullable<Group["files"]> }>(
+          `/groups/${group.id}?offset=${start}&limit=200`,
+        );
+        files.push(
+          ...page.files.filter((file) => !file.keep && file.status === "ready"),
+        );
+        if (page.files.length < 200) break;
+      }
+      return api<Cleanup>("/cleanup/plan", {
+        file_ids: files.map((file) => file.id),
         destination,
         group_id: group.id,
-      }),
+      });
+    },
     onSuccess: onPlan,
   });
   return (
@@ -232,6 +248,8 @@ export function GroupCard({
                   checked={selectForDeletion ? !file.keep : file.keep}
                   disabled={
                     review.isPending ||
+                    selectAll.isPending ||
+                    plan.isPending ||
                     !!file.protected_reason ||
                     file.status !== "ready"
                   }
@@ -290,9 +308,21 @@ export function GroupCard({
         {selectForDeletion
           ? "Select the unwanted files, then click Delete selected for this group. Unselected files are kept."
           : "Check the files to keep. Uncheck unwanted files, then preview deletion for this group."}{" "}
-        You must confirm before anything is moved.
+        The preview includes selected files across all pages of this group. You
+        must confirm before anything is moved.
       </p>
       <div className="group-actions">
+        <button
+          disabled={
+            !detail.data ||
+            selectAll.isPending ||
+            review.isPending ||
+            plan.isPending
+          }
+          onClick={() => selectAll.mutate()}
+        >
+          Select all for deletion (keep none)
+        </button>
         <div>
           <label htmlFor={`destination-${group.id}`}>Cleanup destination</label>
           <select
@@ -308,14 +338,21 @@ export function GroupCard({
         </div>
         <button
           className="primary"
-          disabled={!eligible.length || plan.isPending || review.isPending}
+          disabled={
+            !eligible.length ||
+            plan.isPending ||
+            review.isPending ||
+            selectAll.isPending
+          }
           onClick={() => plan.mutate()}
         >
           {selectForDeletion ? "Delete selected" : "Delete unchecked"} ·{" "}
           {eligible.length} on this page <ArrowRight size={15} />
         </button>
       </div>
-      <ErrorMessage error={detail.error || review.error || plan.error} />
+      <ErrorMessage
+        error={detail.error || review.error || selectAll.error || plan.error}
+      />
     </article>
   );
 }

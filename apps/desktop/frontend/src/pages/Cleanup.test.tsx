@@ -24,55 +24,70 @@ const plan: Plan = {
   ],
 };
 describe("cleanup confirmation", () => {
-  it("shows source and keeper, and never executes before explicit confirmation", async () => {
-    const requests: { url: string; body: unknown }[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string, options?: RequestInit) => {
-        requests.push({
-          url,
-          body: options?.body ? JSON.parse(options.body as string) : null,
-        });
-        return {
-          ok: true,
-          json: async () =>
-            url.endsWith("/execute")
-              ? { ...plan, status: "completed" }
-              : { items: [], total: 0 },
-        };
-      }),
-    );
-    const completed = vi.fn();
-    const client = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-    render(
-      <QueryClientProvider client={client}>
-        <Cleanup plan={plan} onComplete={completed} />
-      </QueryClientProvider>,
-    );
-    expect(screen.getByText("/photos/a copy.jpg")).toBeInTheDocument();
-    expect(screen.getByText("Keep: /photos/a.jpg")).toBeInTheDocument();
-    const button = screen.getByRole("button", { name: "Confirm cleanup" });
-    expect(button).toBeDisabled();
-    fireEvent.click(button);
-    expect(
-      requests.filter((request) => request.url.endsWith("/execute")),
-    ).toHaveLength(0);
-    fireEvent.click(screen.getByRole("checkbox"));
-    expect(button).toBeEnabled();
-    fireEvent.click(button);
-    await waitFor(() => expect(completed).toHaveBeenCalledOnce());
-    expect(
-      requests.find((request) => request.url.endsWith("/execute"))?.body,
-    ).toEqual({
-      plan_id: "plan-1",
-      token: "confirmation-token",
-      confirmed: true,
-    });
-    vi.unstubAllGlobals();
-  });
+  it.each([false, true])(
+    "requires explicit confirmation (keep none: %s)",
+    async (keepNone) => {
+      const preview = keepNone
+        ? {
+            ...plan,
+            items: plan.items.map((item) => ({ ...item, keeper: null })),
+          }
+        : plan;
+      const requests: { url: string; body: unknown }[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, options?: RequestInit) => {
+          requests.push({
+            url,
+            body: options?.body ? JSON.parse(options.body as string) : null,
+          });
+          return {
+            ok: true,
+            json: async () =>
+              url.endsWith("/execute")
+                ? { ...plan, status: "completed" }
+                : { items: [], total: 0 },
+          };
+        }),
+      );
+      const completed = vi.fn();
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <Cleanup plan={preview} onComplete={completed} />
+        </QueryClientProvider>,
+      );
+      expect(screen.getByText("/photos/a copy.jpg")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          keepNone
+            ? "Keep none — no copy will remain in this group"
+            : "Keep: /photos/a.jpg",
+        ),
+      ).toBeInTheDocument();
+      const button = screen.getByRole("button", { name: "Confirm cleanup" });
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+      expect(
+        requests.filter((request) => request.url.endsWith("/execute")),
+      ).toHaveLength(0);
+      fireEvent.click(screen.getByRole("checkbox"));
+      expect(button).toBeEnabled();
+      fireEvent.click(button);
+      await waitFor(() => expect(completed).toHaveBeenCalledOnce());
+      expect(
+        requests.find((request) => request.url.endsWith("/execute"))?.body,
+      ).toEqual({
+        plan_id: "plan-1",
+        token: "confirmation-token",
+        confirmed: true,
+      });
+      vi.unstubAllGlobals();
+    },
+  );
 });

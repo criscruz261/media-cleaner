@@ -25,7 +25,7 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | GET /files/{id}/preview | Normalized image preview or range-capable original video |
 | GET /groups?scan_id=... | Paginated unresolved exact/similar groups, ordered by savings |
 | GET /groups/{id} | Paginated current members and saved keep choices |
-| POST /groups/{id}/review | Set `keep_ids` or partial `changes:{file_id:boolean}`; at least one keeper |
+| POST /groups/{id}/review | Set `keep_ids` or partial `changes:{file_id:boolean}`; empty `keep_ids:[]` selects the entire group for deletion; protected assets must stay kept |
 | POST /cleanup/plan | Dry run for `file_ids`, `group_id` (required for approximate groups), destination `trash` or `quarantine` |
 | POST /cleanup/execute | `plan_id`, matching plan `token`, `confirmed:true` |
 | GET /cleanup/history | Paginated plans, outcomes and recovery records |

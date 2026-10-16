@@ -68,9 +68,9 @@ export function Cleanup({
           </p>
           <p className="muted">
             This preview expires at{" "}
-            {new Date(plan.expires_at).toLocaleTimeString()}. Both selected
-            files and retained copies will be rehashed before cleanup. Trash
-            failures are reported; there is no fallback to permanent deletion.
+            {new Date(plan.expires_at).toLocaleTimeString()}. Selected files and
+            any retained copies will be rehashed before cleanup. Trash failures
+            are reported; there is no fallback to permanent deletion.
           </p>
           {plan.items.some(
             (item) => item.classification === "SIMILAR_CONTENT",
@@ -90,7 +90,11 @@ export function Cleanup({
                 <span className="badge">Move</span>
                 <p>
                   {item.source}
-                  <small>Keep: {item.keeper}</small>
+                  <small>
+                    {item.keeper
+                      ? `Keep: ${item.keeper}`
+                      : "Keep none — no copy will remain in this group"}
+                  </small>
                 </p>
                 <strong>{bytes(item.size)}</strong>
               </div>

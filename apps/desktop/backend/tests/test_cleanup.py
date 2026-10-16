@@ -57,16 +57,8 @@ def test_disconnected_or_missing_keeper(client, workspace):
     assert Path(value["items"][0]["source"]).exists()
 
 
-def test_protected_directory_and_no_keeper_rejected(client, workspace):
+def test_protected_directory_rejected(client, workspace):
     group = duplicate_group(client, workspace)
-    assert client.post("/api/v1/groups/" + group["id"] + "/review", json={"keep_ids": []}).status_code == 422
-    assert (
-        client.post(
-            "/api/v1/groups/" + group["id"] + "/review",
-            json={"changes": {file["id"]: False for file in group["files"]}},
-        ).status_code
-        == 400
-    )
     assert client.put("/api/v1/settings", json={"protected_directories": [str(workspace)]}).status_code == 200
     response = client.post(
         "/api/v1/cleanup/plan",
@@ -155,3 +147,41 @@ def test_batch_cleanup_across_exact_groups_remains_supported(client, workspace):
     assert outcome.status_code == 200, outcome.text
     assert outcome.json()["status"] == "completed", outcome.json()
     assert (workspace / "a.MOV").exists() and (workspace / "b.MOV").exists()
+
+
+def test_keep_none_requires_group_review_confirmation_and_can_restore(client, workspace):
+    group = duplicate_group(client, workspace)
+    review = client.post("/api/v1/groups/" + group["id"] + "/review", json={"keep_ids": []})
+    assert review.status_code == 200, review.text
+    ids = [file["id"] for file in group["files"]]
+    payload = {"file_ids": ids, "destination": "quarantine"}
+    assert client.post("/api/v1/cleanup/plan", json=payload).status_code == 400
+    response = client.post("/api/v1/cleanup/plan", json={**payload, "group_id": group["id"]})
+    assert response.status_code == 201, response.text
+    value = response.json()
+    assert all(item["keeper"] is None for item in value["items"])
+    assert execute(client, value, confirmed=False).status_code == 400
+    assert all(Path(file["path"]).exists() for file in group["files"])
+    result = execute(client, value)
+    assert result.status_code == 200, result.text
+    assert result.json()["status"] == "completed", result.text
+    assert all(not Path(file["path"]).exists() for file in group["files"])
+    restored = client.post("/api/v1/cleanup/" + value["id"] + "/restore", json={"confirmed": True})
+    assert restored.json()["status"] == "restored"
+    assert all(Path(file["path"]).exists() for file in group["files"])
+
+
+def test_keep_none_preview_invalidated_when_choices_change(client, workspace):
+    group = duplicate_group(client, workspace)
+    client.post("/api/v1/groups/" + group["id"] + "/review", json={"keep_ids": []})
+    value = client.post(
+        "/api/v1/cleanup/plan",
+        json={
+            "file_ids": [file["id"] for file in group["files"]],
+            "destination": "quarantine",
+            "group_id": group["id"],
+        },
+    ).json()
+    client.post("/api/v1/groups/" + group["id"] + "/review", json={"keep_ids": [group["files"][0]["id"]]})
+    assert execute(client, value).status_code == 400
+    assert all(Path(file["path"]).exists() for file in group["files"])

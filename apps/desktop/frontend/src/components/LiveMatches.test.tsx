@@ -3,9 +3,14 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LiveMatches } from "./LiveMatches";
 
-it.each(["running", "completed"])(
-  "supports group selection and deletion while %s",
-  async (status) => {
+it.each([
+  { status: "running", all: false },
+  { status: "completed", all: false },
+  { status: "running", all: true },
+  { status: "completed", all: true },
+])(
+  "supports group selection and deletion while $status (select all: $all)",
+  async ({ status, all }) => {
     const group = {
       id: "group",
       member_count: 2,
@@ -14,6 +19,7 @@ it.each(["running", "completed"])(
       recoverable: 5,
     };
     let keep = true;
+    let keepNone = false;
     const file = (id: string) => ({
       id,
       name: id + ".MOV",
@@ -21,12 +27,15 @@ it.each(["running", "completed"])(
       media_type: "video",
       size: 5,
       status: "ready",
-      keep: id === "one" || keep,
+      keep: !keepNone && (id === "one" || keep),
       metadata: {},
       warnings: [],
     });
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
-      if (url.endsWith("/review")) keep = false;
+      if (url.endsWith("/review")) {
+        keep = false;
+        keepNone = JSON.parse(options!.body as string).keep_ids?.length === 0;
+      }
       return {
         ok: true,
         json: async () =>
@@ -63,30 +72,37 @@ it.each(["running", "completed"])(
       expect(
         screen.getByRole("button", { name: /Delete selected · 0/ }),
       ).toBeDisabled();
-      fireEvent.click(screen.getAllByRole("checkbox")[1]);
+      if (all)
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: "Select all for deletion (keep none)",
+          }),
+        );
+      else fireEvent.click(screen.getAllByRole("checkbox")[1]);
+      const deleteLabel = all ? /Delete selected · 2/ : /Delete selected · 1/;
       await waitFor(() =>
-        expect(
-          screen.getByRole("button", { name: /Delete selected · 1/ }),
-        ).toBeEnabled(),
+        expect(screen.getByRole("button", { name: deleteLabel })).toBeEnabled(),
       );
-      fireEvent.click(
-        screen.getByRole("button", { name: /Delete selected · 1/ }),
-      );
+      fireEvent.click(screen.getByRole("button", { name: deleteLabel }));
       await waitFor(() =>
         expect(onPlan.mock.calls[0]?.[0]).toEqual({ id: "plan" }),
       );
       const reviewCall = fetch.mock.calls.find(([url]) =>
         url.endsWith("/review"),
       )!;
-      expect(JSON.parse(reviewCall[1]!.body as string)).toEqual({
-        changes: { two: false },
-      });
+      expect(JSON.parse(reviewCall[1]!.body as string)).toEqual(
+        all
+          ? { keep_ids: [] }
+          : {
+              changes: { two: false },
+            },
+      );
       const call = fetch.mock.calls.find(([url]) =>
         url.endsWith("/cleanup/plan"),
       )!;
       expect(JSON.parse(call[1]!.body as string)).toMatchObject({
         group_id: "group",
-        file_ids: ["two"],
+        file_ids: all ? ["one", "two"] : ["two"],
         destination: "trash",
       });
       expect(
