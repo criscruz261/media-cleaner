@@ -2172,3 +2172,41 @@ footer span:last-child {
     padding: 0;
   }
 }
+
+.group-toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+  gap: 10px 14px;
+  align-items: end;
+  padding: 12px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--canvas);
+}
+.group-toolbar > label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+}
+.group-toolbar select {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  margin: 0;
+}
+.group-toolbar > .hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10px;
+}
+.live-matches-controls > .group-toolbar {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  margin: 8px 0;
+  gap: 10px 14px;
+}

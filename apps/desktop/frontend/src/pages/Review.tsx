@@ -50,23 +50,36 @@ export function Review({
           <h1>Review the repeats.</h1>
           <p>Exact copies and similar media. You decide what stays.</p>
         </div>
-        <select
-          aria-label="Choose scan to review"
-          value={scanId}
-          onChange={(e) => {
-            selectScan(e.target.value);
-            setOffset(0);
-          }}
-        >
-          <option value="">Choose a scan</option>
-          {scans.data?.items.map((scan) => (
-            <option value={scan.id} key={scan.id}>
-              {new Date(scan.created_at).toLocaleString()} ·{" "}
-              {displayLabel(scan.status)}
-            </option>
-          ))}
-        </select>
       </div>
+      <GroupFilters
+        classification={classification}
+        sort={sort}
+        onChange={(value, order) => {
+          setClassification(value);
+          setSort(order);
+          setOffset(0);
+        }}
+      >
+        <label>
+          Choose a scan
+          <select
+            aria-label="Choose scan to review"
+            value={scanId}
+            onChange={(e) => {
+              selectScan(e.target.value);
+              setOffset(0);
+            }}
+          >
+            <option value="">Choose a scan</option>
+            {scans.data?.items.map((scan) => (
+              <option value={scan.id} key={scan.id}>
+                {new Date(scan.created_at).toLocaleString()} ·{" "}
+                {displayLabel(scan.status)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </GroupFilters>
       <div className="notice">
         <ShieldCheck size={18} />
         <p>
@@ -77,15 +90,6 @@ export function Review({
           photo/video companions stay protected.
         </p>
       </div>
-      <GroupFilters
-        classification={classification}
-        sort={sort}
-        onChange={(value, order) => {
-          setClassification(value);
-          setSort(order);
-          setOffset(0);
-        }}
-      />
       {scanId && (
         <BatchCleanup
           scanId={scanId}

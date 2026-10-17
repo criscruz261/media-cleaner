@@ -1,5 +1,5 @@
 import { useCompactGroups } from "./CompactGroupsContext";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 export type GroupFilter = "" | "EXACT_DUPLICATE" | "SIMILAR_CONTENT";
 export const GroupFilterContext = createContext<
   [GroupFilter, (value: GroupFilter) => void] | null
@@ -13,14 +13,21 @@ export function GroupFilters({
   classification,
   sort,
   onChange,
+  children,
 }: {
+  children?: ReactNode;
   classification: GroupFilter;
   sort: string;
   onChange: (classification: GroupFilter, sort: string) => void;
 }) {
   const [compact, setCompact] = useCompactGroups();
   return (
-    <div className="group-actions">
+    <div
+      className="group-actions group-toolbar"
+      role="region"
+      aria-label="Group review controls"
+    >
+      {children}
       <label>
         Show groups{" "}
         <select
