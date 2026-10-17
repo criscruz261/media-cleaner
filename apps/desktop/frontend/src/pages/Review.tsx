@@ -169,7 +169,11 @@ export function GroupCard({
     },
   });
   const selectAll = useMutation({
-    mutationFn: () => api(`/groups/${group.id}/review`, { keep_ids: [] }),
+    mutationFn: (keepAll: boolean) =>
+      api(
+        `/groups/${group.id}/review`,
+        keepAll ? { keep_all: true } : { keep_ids: [] },
+      ),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["selection-summary"] });
       return client.invalidateQueries({ queryKey: ["group", group.id] });
@@ -180,6 +184,9 @@ export function GroupCard({
       (file) => !file.keep && file.status === "ready",
     ) ?? [];
   const selectedCount = detail.data?.selected_count ?? eligible.length;
+  const readyCount =
+    detail.data?.ready_count ?? detail.data?.member_count ?? group.member_count;
+  const allSelected = readyCount > 0 && selectedCount === readyCount;
   const plan = useMutation({
     mutationFn: async () => {
       const files = [];
@@ -386,9 +393,11 @@ export function GroupCard({
               review.isPending ||
               plan.isPending
             }
-            onClick={() => selectAll.mutate()}
+            onClick={() => selectAll.mutate(allSelected)}
           >
-            Select all for deletion (keep none)
+            {allSelected
+              ? "Unselect all for deletion (keep all)"
+              : "Select all for deletion (keep none)"}
           </button>
           <button
             className="primary"

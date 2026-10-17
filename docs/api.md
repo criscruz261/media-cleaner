@@ -76,3 +76,5 @@ After a successful Stop scan, the desktop clears the selected scan and returns t
 Current scan has a persisted “Show processing thumbnails” toggle. Active file activity includes `file_id`; the thumbnail endpoint permits an identity-checked preview for an actively processed `discovered` file as well as ready files. Other unfinished files remain unavailable. Disabling the toggle unmounts thumbnail images; unsupported decoders display a fallback without blocking scanning.
 
 Cleanup destination is selected once in the review header and shared by both per-group and batch cleanup on Scanner and Duplicate review. Group cards no longer have their own destination selector.
+
+When every ready member is selected for deletion, the group action becomes “Unselect all for deletion (keep all)”. It submits `POST /groups/{id}/review` with `keep_all:true`, retaining every member across all pages and clearing explicit keep-none authorization. `keep_all` cannot be combined with `keep_ids` or nonempty `changes`. Group details include `ready_count` alongside `selected_count` for this state.

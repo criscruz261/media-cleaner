@@ -455,3 +455,21 @@ def test_selection_summary_tracks_filter_choices_and_deduplicates_overlapping_gr
         session.get(File, other_id).status = "trashed"
     assert client.get(url).json() == {"selected_files": 1, "total_files": 2}
     assert client.get(url + "?classification=wrong").status_code == 422
+
+
+def test_keep_all_clears_selection_for_entire_group_and_revokes_keep_none(client, workspace):
+    from conftest import scan
+
+    for name in ["a.MOV", "b.MOV", "c.MOV"]:
+        (workspace / name).write_bytes(b"identical")
+    job = scan(client, [workspace])
+    group = client.get(f"/api/v1/groups?scan_id={job['id']}").json()["items"][0]
+    url = f"/api/v1/groups/{group['id']}"
+    assert client.post(url + "/review", json={"keep_ids": []}).status_code == 200
+    assert client.get(url + "?limit=1").json()["selected_count"] == 3
+    assert client.post(url + "/review", json={"keep_all": True}).status_code == 200
+    detail = client.get(url + "?offset=1&limit=1").json()
+    assert detail["ready_count"] == 3
+    assert detail["selected_count"] == 0
+    assert all(file["keep"] for file in client.get(url).json()["files"])
+    assert not detail["evidence"]["allow_keep_none"]

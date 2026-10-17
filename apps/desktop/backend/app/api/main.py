@@ -588,7 +588,10 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             selected_count = session.scalar(select(func.count()).select_from(
                 query.where(GroupMember.keep.is_(False)).subquery()
             ))
-            return record(group) | {"files": members, "selected_count": selected_count}
+            return record(group) | {
+                "files": members, "selected_count": selected_count,
+                "ready_count": session.scalar(select(func.count()).select_from(query.subquery())),
+            }
 
     @app.post("/api/v1/groups/{group_id}/review")
     def review(group_id: str, value: ReviewRequest):
@@ -598,7 +601,9 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 raise HTTPException(404, "Group not found")
             members = session.scalars(select(GroupMember).where(GroupMember.group_id == group_id)).all()
             ids = {member.file_id for member in members}
-            keep_ids = (
+            if value.keep_all and (value.keep_ids is not None or value.changes):
+                raise group_error(session, group_id, "Choose one review action at a time")
+            keep_ids = ids if value.keep_all else (
                 set(value.keep_ids)
                 if value.keep_ids is not None
                 else {member.file_id for member in members if member.keep}

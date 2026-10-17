@@ -38,8 +38,9 @@ it.each([
     });
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
       if (url.endsWith("/review")) {
-        keep = false;
-        keepNone = JSON.parse(options!.body as string).keep_ids?.length === 0;
+        const value = JSON.parse(options!.body as string);
+        keep = !!value.keep_all;
+        keepNone = value.keep_ids?.length === 0;
       }
       return {
         ok: true,
@@ -127,6 +128,28 @@ it.each([
       expect(
         fetch.mock.calls.some(([url]) => url.includes("/cleanup/execute")),
       ).toBe(false);
+      if (all) {
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: "Unselect all for deletion (keep all)",
+          }),
+        );
+        await waitFor(() =>
+          expect(
+            screen.getByRole("button", { name: /Delete selected · 0/ }),
+          ).toBeDisabled(),
+        );
+        expect(
+          screen
+            .getAllByRole("checkbox")
+            .every((box) => !(box as HTMLInputElement).checked),
+        ).toBe(true);
+        expect(
+          screen.getByRole("button", {
+            name: "Select all for deletion (keep none)",
+          }),
+        ).toBeInTheDocument();
+      }
     } finally {
       vi.unstubAllGlobals();
     }
