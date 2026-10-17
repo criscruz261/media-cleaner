@@ -1,3 +1,4 @@
+import { usePopupKeyboard } from "./usePopupKeyboard";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useIsMutating } from "@tanstack/react-query";
 import { api } from "../services/api";
@@ -18,11 +19,18 @@ export function ShutdownControl({ onStopped }: { onStopped: () => void }) {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     panel.current?.focus();
+
     return () => {
       document.body.style.overflow = overflow;
       previous?.focus();
     };
   }, [open]);
+  usePopupKeyboard(open, (event) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+      setConfirmed(false);
+    }
+  });
   return (
     <>
       <button disabled={busy} onClick={() => setOpen(true)}>
@@ -35,11 +43,6 @@ export function ShutdownControl({ onStopped }: { onStopped: () => void }) {
             tabIndex={-1}
             className="cleanup-dialog"
             onKeyDown={(event) => {
-              if (event.key === "Escape" && !stop.isPending) {
-                event.preventDefault();
-                setOpen(false);
-                setConfirmed(false);
-              }
               if (event.key === "Tab") {
                 const items = [
                   ...panel.current!.querySelectorAll<HTMLElement>(

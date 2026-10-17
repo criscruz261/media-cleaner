@@ -147,7 +147,15 @@ public final class Matcher {
         group.items.stream()
             .filter(item -> !COPY.matcher(item.name).find())
             .collect(java.util.stream.Collectors.toList());
-    return originals.size() == 1 ? originals.get(0).id : null;
+    return originals.size() == 1
+        ? originals.get(0).id
+        : group.items.stream()
+            .min(
+                java.util.Comparator.comparing(
+                        (Item item) -> item.name.toLowerCase(java.util.Locale.ROOT))
+                    .thenComparing(item -> item.id))
+            .map(item -> item.id)
+            .orElse(null);
   }
 
   private static final class Tree {

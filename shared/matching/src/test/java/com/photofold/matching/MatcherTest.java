@@ -28,6 +28,16 @@ public class MatcherTest {
   }
 
   @Test
+  public void exactGroupsAlwaysSuggestOneKeeper() {
+    Matcher matcher = new Matcher();
+    matcher.add(photo("b", "b.jpg", "same", 0));
+    matcher.add(photo("a", "a.jpg", "same", 0));
+    assertEquals("a", Matcher.original(matcher.groups().get(0)));
+    matcher.add(photo("c", "c.jpg", "different", 1));
+    assertNull(Matcher.original(matcher.groups().get(1)));
+  }
+
+  @Test
   public void completeLinkRejectsWeakChains() {
     Matcher matcher = new Matcher();
     matcher.add(photo("a", "a", "a", 0));

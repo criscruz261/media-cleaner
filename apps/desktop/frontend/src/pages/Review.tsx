@@ -1,3 +1,4 @@
+import { GroupFilters, type GroupFilter } from "../components/GroupFilters";
 import { GroupPreview, PreviewContext } from "../components/GroupPreview";
 import { BatchCleanup } from "../components/BatchCleanup";
 import { VideoCompare } from "../components/VideoCompare";
@@ -20,14 +21,19 @@ export function Review({
   navigate: (page: string) => void;
 }) {
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [classification, setClassification] = useState<GroupFilter>("");
+  const [sort, setSort] = useState("discovered");
   const scans = useQuery({
     queryKey: ["scans"],
     queryFn: () => api<Page<Scan>>("/scans?limit=100"),
   });
   const groups = useQuery({
-    queryKey: ["groups", scanId, offset],
+    queryKey: ["groups", scanId, offset, classification, sort, pageSize],
     queryFn: () =>
-      api<Page<Group>>(`/groups?scan_id=${scanId}&offset=${offset}&limit=10`),
+      api<Page<Group>>(
+        `/groups?scan_id=${scanId}&offset=${offset}&limit=${pageSize}&sort=${sort}${classification ? `&classification=${classification}` : ""}`,
+      ),
     enabled: !!scanId,
     refetchInterval: 1000,
   });
@@ -59,13 +65,33 @@ export function Review({
         <ShieldCheck size={18} />
         <p>
           Exact copies and approximate media matches are labeled separately.
-          Similar groups keep everything selected until you review them. A file
-          may appear in both an exact and a similar group. Copy-name
-          recommendations are advisory. RAW originals, protected folders, and
-          potential photo/video companions stay protected.
+          Similar groups start with no files selected for deletion. A file may
+          appear in both an exact and a similar group. Copy-name recommendations
+          are advisory. RAW originals, protected folders, and potential
+          photo/video companions stay protected.
         </p>
       </div>
-      {scanId && <BatchCleanup scanId={scanId} onPlan={onPlan} />}
+      <GroupFilters
+        classification={classification}
+        sort={sort}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setOffset(0);
+        }}
+        onChange={(value, order) => {
+          setClassification(value);
+          setSort(order);
+          setOffset(0);
+        }}
+      />
+      {scanId && (
+        <BatchCleanup
+          scanId={scanId}
+          onPlan={onPlan}
+          classification={classification}
+        />
+      )}
       {!scanId ? (
         <Empty title="Choose a scan to review">
           <button onClick={() => navigate("Scanner")}>
@@ -75,9 +101,8 @@ export function Review({
       ) : groups.isPending ? (
         <Loading />
       ) : !groups.data?.items.length ? (
-        <Empty title="No exact-match groups">
-          Run a similar-media scan or choose a completed scan above. Video
-          content similarity is not included yet.
+        <Empty title="No matching groups">
+          Try another filter or choose another scan.
         </Empty>
       ) : (
         groups.data.items.map((group) => (
@@ -93,7 +118,7 @@ export function Review({
       <Pagination
         offset={offset}
         total={groups.data?.total ?? 0}
-        size={10}
+        size={pageSize}
         onChange={setOffset}
       />
     </>
@@ -103,7 +128,7 @@ export function GroupCard({
   group,
   onPlan,
   thumbnailFirst = false,
-  selectForDeletion = false,
+  selectForDeletion = true,
   live = false,
 }: {
   group: Group;
@@ -333,6 +358,12 @@ export function GroupCard({
         The preview includes selected files across all pages of this group. You
         must confirm before anything is moved.
       </p>
+      {detail.data?.review_status === "reviewed" && (
+        <p role="status">
+          Selections saved · included in batch cleanup when this group matches
+          the filter.
+        </p>
+      )}
       <div className="group-actions">
         <button
           disabled={
@@ -345,6 +376,12 @@ export function GroupCard({
         >
           Select all for deletion (keep none)
         </button>
+        {group.classification === "EXACT_DUPLICATE" && (
+          <p className="hint">
+            Keep at least one file, or explicitly choose Select all for deletion
+            to keep none. To change the keeper, keep another copy first.
+          </p>
+        )}
         <div>
           <label htmlFor={`destination-${group.id}`}>Cleanup destination</label>
           <select

@@ -1,3 +1,4 @@
+import { usePopupKeyboard } from "./usePopupKeyboard";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useIsMutating } from "@tanstack/react-query";
@@ -19,11 +20,15 @@ export function CleanupDialog({
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     panel.current?.focus();
+
     return () => {
       document.body.style.overflow = overflow;
       previous?.focus();
     };
   }, []);
+  usePopupKeyboard(true, (event) => {
+    if (event.key === "Escape") onClose();
+  });
   return createPortal(
     <div
       className="modal-backdrop"
@@ -40,10 +45,6 @@ export function CleanupDialog({
         aria-label="Review and confirm deletion"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && !busy) {
-            event.preventDefault();
-            onClose();
-          }
           if (event.key === "Tab") {
             const items = [
               ...panel.current!.querySelectorAll<HTMLElement>(

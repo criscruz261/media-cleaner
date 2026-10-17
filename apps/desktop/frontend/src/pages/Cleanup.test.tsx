@@ -65,9 +65,7 @@ describe("cleanup confirmation", () => {
       expect(screen.getByText("/photos/a copy.jpg")).toBeInTheDocument();
       expect(
         screen.getByText(
-          keepNone
-            ? "Keep none — no copy will remain in this group"
-            : "Keep: /photos/a.jpg",
+          keepNone ? "No files will be kept in this group." : "/photos/a.jpg",
         ),
       ).toBeInTheDocument();
       const button = screen.getByRole("button", { name: "Confirm cleanup" });

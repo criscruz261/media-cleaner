@@ -1,3 +1,4 @@
+import { GroupFilters, type GroupFilter } from "./GroupFilters";
 import { BatchCleanup } from "./BatchCleanup";
 import { GroupCard } from "../pages/Review";
 import type { Cleanup } from "../types/api";
@@ -24,11 +25,16 @@ export function LiveMatches({
   onPlan?: (plan: Cleanup) => void;
 }) {
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [classification, setClassification] = useState<GroupFilter>("");
+  const [sort, setSort] = useState("discovered");
   const running = ["queued", "running"].includes(status);
   const matches = useQuery({
-    queryKey: ["scan-matches", scanId, offset],
+    queryKey: ["scan-matches", scanId, offset, classification, sort, pageSize],
     queryFn: () =>
-      api<Matches>(`/scans/${scanId}/matches?offset=${offset}&limit=6`),
+      api<Matches>(
+        `/scans/${scanId}/matches?offset=${offset}&limit=${pageSize}&sort=${sort}${classification ? `&classification=${classification}` : ""}`,
+      ),
     refetchInterval: running ? 1000 : false,
   });
   useEffect(() => {
@@ -62,7 +68,27 @@ export function LiveMatches({
           </p>
         </div>
       )}
-      {onPlan && <BatchCleanup scanId={scanId} onPlan={onPlan} />}
+      <GroupFilters
+        classification={classification}
+        sort={sort}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setOffset(0);
+        }}
+        onChange={(value, order) => {
+          setClassification(value);
+          setSort(order);
+          setOffset(0);
+        }}
+      />
+      {onPlan && (
+        <BatchCleanup
+          scanId={scanId}
+          onPlan={onPlan}
+          classification={classification}
+        />
+      )}
       {matches.data?.items.length ? (
         matches.data.items.map((group) =>
           onPlan ? (
@@ -91,7 +117,7 @@ export function LiveMatches({
       <Pagination
         offset={offset}
         total={matches.data?.total ?? 0}
-        size={6}
+        size={pageSize}
         onChange={setOffset}
       />
       {status === "completed" && (

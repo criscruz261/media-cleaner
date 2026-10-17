@@ -1,3 +1,4 @@
+import { CleanupComparison } from "../components/CleanupComparison";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, Undo2, ArrowRight } from "lucide-react";
@@ -89,22 +90,7 @@ export function Cleanup({
               </p>
             </div>
           )}
-          <div className="cleanup-files">
-            {plan.items.map((item) => (
-              <div key={item.file_id}>
-                <span className="badge">Move</span>
-                <p>
-                  {item.source}
-                  <small>
-                    {item.keeper
-                      ? `Keep: ${item.keeper}`
-                      : "Keep none — no copy will remain in this group"}
-                  </small>
-                </p>
-                <strong>{bytes(item.size)}</strong>
-              </div>
-            ))}
-          </div>
+          <CleanupComparison plan={plan} />
           <label className="checkbox-label">
             <input
               type="checkbox"

@@ -33,5 +33,6 @@ class RestoreRequest(BaseModel):
 
 
 class SelectedPlanRequest(BaseModel):
+    classification: Literal["EXACT_DUPLICATE", "SIMILAR_CONTENT"] | None = None
     scan_id: str
     destination: Literal["trash", "quarantine"] = "trash"

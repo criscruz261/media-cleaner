@@ -1,3 +1,4 @@
+import { usePopupKeyboard } from "./usePopupKeyboard";
 import { useState } from "react";
 import { ExternalLink, ZoomIn, Play } from "lucide-react";
 import { prefix } from "../services/api";
@@ -17,6 +18,9 @@ export function MediaPreview({
   const [failed, setFailed] = useState(false),
     [zoom, setZoom] = useState(false);
   const url = `${prefix}/files/${file.id}/preview`;
+  usePopupKeyboard(zoom, (event) => {
+    if (event.key === "Escape") setZoom(false);
+  });
   return (
     <>
       <div className="preview">

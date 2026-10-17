@@ -1,3 +1,4 @@
+import { usePopupKeyboard } from "./usePopupKeyboard";
 import { ScanProgress } from "./ScanProgress";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -78,13 +79,15 @@ function Comparison({
       void client.invalidateQueries({ queryKey: ["compare-videos", groupId] });
     },
   });
+  usePopupKeyboard(true, (event) => {
+    if (event.key === "Escape") close();
+  });
   const videos = () =>
     Array.from(panel.current?.querySelectorAll("video") ?? []);
   useEffect(() => {
     const element = panel.current;
     element?.querySelector<HTMLButtonElement>("button")?.focus();
     function keyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
       if (event.key === "Tab") {
         const focusable = Array.from(
           element?.querySelectorAll<HTMLElement>(

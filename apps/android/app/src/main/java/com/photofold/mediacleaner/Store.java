@@ -106,6 +106,7 @@ final class Store extends SQLiteOpenHelper {
           values.put("id", group.id);
           values.put("classification", group.classification);
           values.put("uris", uris.toString());
+          values.put("recommended", Matcher.original(group));
           // Keep the first-publication time and row ID when membership grows.
           if (db.update("groups", values, "id=?", new String[] {group.id}) == 0) {
             values.put("updated", System.currentTimeMillis());
@@ -182,22 +183,68 @@ final class Store extends SQLiteOpenHelper {
   }
 
   synchronized List<Group> groups(int limit) {
+    return groups(limit, "", 0);
+  }
+
+  synchronized List<Group> groups(int limit, String classification, int sort) {
     List<Group> result = new ArrayList<>();
     try (Cursor c =
         getReadableDatabase()
             .rawQuery(
-                "SELECT * FROM groups ORDER BY updated ASC,rowid ASC LIMIT ?",
-                new String[] {String.valueOf(limit)})) {
+                "SELECT * FROM groups WHERE (?='' OR classification=?) ORDER BY "
+                    + (sort == 1
+                        ? "CASE WHEN classification='EXACT_DUPLICATE' THEN 0 ELSE 1 END,"
+                        : "")
+                    + "updated ASC,rowid ASC LIMIT ?",
+                new String[] {
+                  classification,
+                  classification,
+                  String.valueOf(sort < 2 ? limit : Integer.MAX_VALUE)
+                })) {
       while (c.moveToNext()) {
         Group group = readGroup(c);
         if (group.files.size() > 1) result.add(group);
       }
     }
-    return result;
+    if (sort == 2)
+      result.sort(
+          java.util.Comparator.comparingLong(
+                  (Group group) -> {
+                    long total = group.files.stream().mapToLong(file -> file.size).sum();
+                    long retained =
+                        group.files.stream().mapToLong(file -> file.size).max().orElse(0);
+                    return total - retained;
+                  })
+              .reversed());
+    if (sort == 3)
+      result.sort(
+          java.util.Comparator.comparingInt((Group group) -> group.files.size()).reversed());
+    return new ArrayList<>(result.subList(0, Math.min(limit, result.size())));
+  }
+
+  synchronized void approve(String groupId) {
+    Group group = group(groupId);
+    if (group == null) throw new IllegalArgumentException("Group changed. Reopen review.");
+    SQLiteDatabase db = getWritableDatabase();
+    db.beginTransaction();
+    try {
+      for (Media file : group.files) select(groupId, file.uri, !keep(group, file));
+      db.setTransactionSuccessful();
+    } finally {
+      db.endTransaction();
+    }
   }
 
   synchronized int groupCount() {
-    try (Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM groups", null)) {
+    return groupCount("");
+  }
+
+  synchronized int groupCount(String classification) {
+    try (Cursor c =
+        getReadableDatabase()
+            .rawQuery(
+                "SELECT COUNT(*) FROM groups WHERE (?='' OR classification=?)",
+                new String[] {classification, classification})) {
       c.moveToFirst();
       return c.getInt(0);
     }
@@ -217,16 +264,28 @@ final class Store extends SQLiteOpenHelper {
   }
 
   synchronized void select(String groupId, String uri, boolean selected) {
+    select(groupId, uri, selected, false);
+  }
+
+  private void select(String groupId, String uri, boolean selected, boolean all) {
     Group group = group(groupId);
     if (group == null) throw new IllegalArgumentException("Group changed. Reopen comparison.");
     Media file =
         group.files.stream().filter(item -> item.uri.equals(uri)).findFirst().orElseThrow();
     if (selected && !file.protection.isEmpty()) throw new IllegalArgumentException(file.protection);
+    if (selected
+        && !all
+        && keep(group, file)
+        && group.classification.equals("EXACT_DUPLICATE")
+        && group.files.stream().noneMatch(item -> !item.uri.equals(uri) && keep(group, item)))
+      throw new IllegalArgumentException(
+          "Keep at least one file. Keep another copy first to change the keeper.");
     ContentValues values = new ContentValues();
     values.put("uri", uri);
     values.put("identity", file.identity);
     values.put("classification", group.classification);
     values.put("keep", selected ? 0 : 1);
+    if (!selected) put("keepNone:" + groupId, "");
     getWritableDatabase()
         .insertWithOnConflict("choices", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     touch();
@@ -245,6 +304,19 @@ final class Store extends SQLiteOpenHelper {
     return false;
   }
 
+  private String keepNoneSignature(Group group) {
+    return group.files.stream()
+        .map(file -> file.uri + ":" + file.identity)
+        .sorted()
+        .collect(java.util.stream.Collectors.joining("\n"));
+  }
+
+  synchronized boolean explicitKeepNone(Group group) {
+    return !group.files.isEmpty()
+        && meta("keepNone:" + group.id, "").equals(keepNoneSignature(group))
+        && group.files.stream().noneMatch(file -> keep(group, file));
+  }
+
   synchronized void selectAll(String groupId) {
     Group group = group(groupId);
     if (group == null) throw new IllegalArgumentException("Group changed. Reopen review.");
@@ -254,7 +326,8 @@ final class Store extends SQLiteOpenHelper {
     SQLiteDatabase db = getWritableDatabase();
     db.beginTransaction();
     try {
-      for (Media file : group.files) select(groupId, file.uri, true);
+      for (Media file : group.files) select(groupId, file.uri, true, true);
+      put("keepNone:" + groupId, keepNoneSignature(group));
       db.setTransactionSuccessful();
     } finally {
       db.endTransaction();

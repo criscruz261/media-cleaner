@@ -98,3 +98,69 @@ it("keeps the preview and scan progress when its group leaves the result page", 
     vi.unstubAllGlobals();
   }
 });
+
+it("uses deletion selections by default and saves them without a review button", async () => {
+  const group = {
+    id: "group",
+    scan_id: "scan",
+    member_count: 2,
+    classification: "EXACT_DUPLICATE",
+    evidence: {},
+    recoverable: 5,
+  } as Group;
+  const choices = [true, false];
+  const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith("/review")) {
+      const { changes } = JSON.parse(options!.body as string);
+      for (const [id, keep] of Object.entries(changes))
+        choices[Number(id)] = keep as boolean;
+    }
+    return {
+      ok: true,
+      json: async () =>
+        url.endsWith("/settings")
+          ? { cleanup_destination: "trash" }
+          : url.endsWith("/review")
+            ? { saved: true }
+            : {
+                ...group,
+                files: choices.map((keep, index) => ({
+                  id: String(index),
+                  name: `${index}.jpg`,
+                  media_type: "image",
+                  status: "ready",
+                  keep,
+                  size: 5,
+                  warnings: [],
+                  metadata: {},
+                })),
+              },
+    };
+  });
+  vi.stubGlobal("fetch", fetch);
+  try {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <GroupCard group={group} onPlan={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    const boxes = await screen.findAllByRole("checkbox", {
+      name: "Select for deletion",
+    });
+    expect(boxes[0]).not.toBeChecked();
+    expect(boxes[1]).toBeChecked();
+    expect(
+      screen.queryByRole("button", {
+        name: "Mark selections reviewed for batch deletion",
+      }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(boxes[1]);
+    await waitFor(() => expect(boxes[1]).not.toBeChecked());
+    const request = fetch.mock.calls.find(([url]) => url.endsWith("/review"));
+    expect(JSON.parse(request![1]!.body as string)).toEqual({
+      changes: { "1": true },
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

@@ -60,7 +60,17 @@ export type Group = {
   review_status: string;
   files?: MediaFile[];
 };
+export type CleanupReviewFile = {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  media_type: string;
+};
 export type CleanupItem = {
+  group_id?: string;
+  keeper_id?: string | null;
+  review_files?: CleanupReviewFile[];
   file_id: string;
   source: string;
   keeper: string | null;

@@ -185,7 +185,7 @@ try {
       .filter({ has: page.locator(".filename", { hasText: "reencoded.mp4" }) })
       .getByRole("checkbox")
       .click();
-    await group.getByRole("button", { name: /Delete unchecked · 1/ }).waitFor();
+    await group.getByRole("button", { name: /Delete selected · 1/ }).waitFor();
     await group.locator(".evidence summary").click();
     await group.getByText(/time-spaced visual samples match/).waitFor();
     await mkdir(fixture.artifacts, { recursive: true });
@@ -195,14 +195,14 @@ try {
     });
   } else if (fixture.similar) {
     for (const box of await boxes.all())
-      if (!(await box.isChecked()))
-        throw new Error("Similar photos must all start kept");
+      if (await box.isChecked())
+        throw new Error("Similar photos must start unselected for deletion");
     await group
       .locator(".media-card")
       .filter({ has: page.locator(".filename", { hasText: "resized.jpg" }) })
       .getByRole("checkbox")
       .click();
-    await group.getByRole("button", { name: /Delete unchecked · 1/ }).waitFor();
+    await group.getByRole("button", { name: /Delete selected · 1/ }).waitFor();
     await group.locator(".evidence summary").click();
     await group.getByText(/Maximum pairwise pHash distance/).waitFor();
     await mkdir(fixture.artifacts, { recursive: true });
@@ -214,11 +214,11 @@ try {
     const original = group
       .locator(".media-card")
       .filter({ has: page.locator(".filename", { hasText: "IMG_0971.png" }) });
-    if (!(await original.getByRole("checkbox").isChecked()))
-      throw new Error("Original not prechecked");
+    if (await original.getByRole("checkbox").isChecked())
+      throw new Error("Original must not be selected for deletion");
   }
   await group.locator(".group-actions select").selectOption("quarantine");
-  await group.getByRole("button", { name: /Delete unchecked/ }).click();
+  await group.getByRole("button", { name: /Delete selected/ }).click();
   await page
     .getByRole("heading", { name: /Dry-run cleanup preview/ })
     .waitFor();

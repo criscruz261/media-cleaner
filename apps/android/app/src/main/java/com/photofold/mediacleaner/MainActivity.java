@@ -37,6 +37,8 @@ public final class MainActivity extends Activity {
   private TextView progress, activity, access;
   private ProgressBar bar;
   private Spinner albums;
+  private String groupFilter = "";
+  private int groupSort = 0;
   private Button start, pause, resume;
   private String stamp = "";
   private int limit = 5;
@@ -103,6 +105,50 @@ public final class MainActivity extends Activity {
         "Select unwanted files for deletion. New groups are appended; existing groups may gain"
             + " files while scanning. Android asks for confirmation before moving anything to"
             + " Trash.");
+    label(body, "Filter groups (also scopes batch deletion)");
+    Spinner filter = new Spinner(this);
+    filter.setAdapter(
+        new ArrayAdapter<>(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            List.of("All matches", "Exact duplicates only", "Similar media only")));
+    body.addView(filter);
+    label(body, "Sort groups");
+    Spinner sort = new Spinner(this);
+    sort.setAdapter(
+        new ArrayAdapter<>(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            List.of(
+                "Discovery order",
+                "Exact duplicates first",
+                "Most recoverable space",
+                "Most files")));
+    body.addView(sort);
+    AdapterView.OnItemSelectedListener options =
+        new AdapterView.OnItemSelectedListener() {
+          public void onNothingSelected(AdapterView<?> parent) {}
+
+          public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            groupFilter =
+                switch (filter.getSelectedItemPosition()) {
+                  case 1 -> "EXACT_DUPLICATE";
+                  case 2 -> "SIMILAR_CONTENT";
+                  default -> "";
+                };
+            groupSort = sort.getSelectedItemPosition();
+            limit = 5;
+            stamp = "";
+            if (groups != null) refresh();
+          }
+        };
+    filter.setOnItemSelectedListener(options);
+    sort.setOnItemSelectedListener(options);
+    label(
+        body,
+        "Batch cleanup includes reviewed groups matching this filter across every page. Mark a"
+            + " group's selections reviewed to accept its suggested keeper. Size sorting may move"
+            + " groups as scanning continues.");
     batchDelete = button(body, "Delete selected across groups", () -> preview(null));
     emptyGroups = label(body, "");
     groups = column();
@@ -374,7 +420,7 @@ public final class MainActivity extends Activity {
             + (active ? "Groups may still update while scanning." : "Saved results.");
     for (TextView indicator : reviewProgress) indicator.setText(reviewStatus);
     batchDelete.setEnabled(!cleanupBusy);
-    List<Store.Group> found = store.groups(limit);
+    List<Store.Group> found = store.groups(limit, groupFilter, groupSort);
     StringBuilder identity = new StringBuilder();
     for (Store.Group group : found) {
       identity.append(group.id()).append(group.recommended());
@@ -423,7 +469,15 @@ public final class MainActivity extends Activity {
         expandedGroups.remove(id);
       }
     }
-    groupCount.setText("Showing " + found.size() + " of " + store.groupCount() + " groups");
+    for (int i = 0; i < found.size(); i++) {
+      View card = groupCards.get(found.get(i).id());
+      if (groups.indexOfChild(card) != i) {
+        groups.removeView(card);
+        groups.addView(card, i);
+      }
+    }
+    groupCount.setText(
+        "Showing " + found.size() + " of " + store.groupCount(groupFilter) + " matching groups");
     renderHistory();
   }
 
@@ -513,6 +567,21 @@ public final class MainActivity extends Activity {
                   members,
                   "Showing first 50 files. Video comparison pages through the full video group.");
           });
+    Button approve =
+        button(
+            card,
+            "Mark selections reviewed for batch deletion",
+            () -> {
+              try {
+                store.approve(group.id());
+                stamp = "";
+                refresh();
+                message("Selections reviewed. Included in batch cleanup for this filter.");
+              } catch (Exception failure) {
+                message(failure.getMessage());
+              }
+            });
+    approve.setEnabled(!cleanupBusy);
     Button selectAll =
         button(
             card,
@@ -527,6 +596,9 @@ public final class MainActivity extends Activity {
               }
             });
     selectAll.setEnabled(!cleanupBusy);
+    if (group.classification().equals("EXACT_DUPLICATE")) {
+      label(card, "Keep one copy, or use Select all for deletion to keep none.");
+    }
     long selected = group.files().stream().filter(file -> !store.keep(group, file)).count();
     Button delete = button(card, "Delete selected (" + selected + ")", () -> preview(group.id()));
     delete.setContentDescription(
@@ -838,6 +910,29 @@ public final class MainActivity extends Activity {
     dialog.getWindow().setLayout(-1, -1);
   }
 
+  private void validateExactKeepers(Set<String> selected, MediaRepository.Check checkpoint, boolean rehash)
+      throws Exception {
+    for (Store.Group group : store.groups(Integer.MAX_VALUE, "EXACT_DUPLICATE", 0)) {
+      if (group.files().stream().noneMatch(file -> selected.contains(file.uri))) continue;
+      if (store.explicitKeepNone(group)
+          && group.files().stream().allMatch(file -> selected.contains(file.uri))) continue;
+      boolean retained = false;
+      for (Media file : group.files()) {
+        checkpoint.run();
+        if (selected.contains(file.uri) || !store.keep(group, file)) continue;
+        if (!MediaRepository.unchanged(this, file)) continue;
+        if (rehash
+            && !MediaRepository.hash(this, file, checkpoint, ignored -> {}).equals(file.digest))
+          continue;
+        retained = true;
+        break;
+      }
+      if (!retained)
+        throw new IllegalArgumentException(
+            "Keep at least one verified file in each exact-duplicate group.");
+    }
+  }
+
   private void preview(String groupId) {
     if (cleanupBusy) return;
     if (!store.meta("pendingOperation", "").isEmpty()) {
@@ -846,6 +941,8 @@ public final class MainActivity extends Activity {
               + " recovery.");
       return;
     }
+    final String cleanupFilter = groupFilter;
+    final int cleanupSort = groupSort;
     boolean wasRunning = ScanService.running.get();
     cleanupBusy = true;
     ScanService.paused.set(true);
@@ -863,7 +960,8 @@ public final class MainActivity extends Activity {
                   "The scanner is still stopping. Retry once it is paused.");
             List<Store.Group> requested = new ArrayList<>();
             if (groupId == null) {
-              for (Store.Group candidate : store.groups(Integer.MAX_VALUE))
+              for (Store.Group candidate :
+                  store.groups(Integer.MAX_VALUE, cleanupFilter, cleanupSort))
                 if (store.reviewed(candidate)) requested.add(candidate);
             } else {
               Store.Group candidate = store.group(groupId);
@@ -878,6 +976,7 @@ public final class MainActivity extends Activity {
             if (selectedUris.isEmpty() || selectedUris.size() > 100)
               throw new IllegalArgumentException("Choose 1–100 files per cleanup across groups.");
             List<Media> current = MediaRepository.discover(this, store.meta("album", ""), () -> {});
+            validateExactKeepers(selectedUris, () -> {}, false);
             JSONArray items = new JSONArray();
             Set<String> added = new HashSet<>();
             boolean similar = false;
@@ -1020,6 +1119,10 @@ public final class MainActivity extends Activity {
             List<Media> current =
                 MediaRepository.discover(this, store.meta("album", ""), notCancelled);
             JSONArray items = plan.getJSONArray("items");
+            Set<String> selectedForCleanup = new HashSet<>();
+            for (int i = 0; i < items.length(); i++)
+              selectedForCleanup.add(items.getJSONObject(i).getString("uri"));
+            validateExactKeepers(selectedForCleanup, notCancelled, true);
             List<Uri> uris = new ArrayList<>();
             Set<String> verified = new HashSet<>();
             for (int i = 0; i < items.length(); i++) {

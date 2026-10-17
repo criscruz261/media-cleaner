@@ -1,3 +1,4 @@
+from typing import Literal
 import asyncio
 from contextlib import asynccontextmanager
 import json
@@ -47,6 +48,9 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     api_token = token or authentication_token(directory)
     engine, sessions = open_database(directory / "media-cleaner.sqlite3")
     configure(directory)
+    from app.retention.recommend import initialize_exact_selections
+
+    initialize_exact_selections(sessions)
 
     def settings():
         with sessions() as session:
@@ -316,8 +320,23 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                     raise ValueError("This scan does not support that action in its current state")
                 return record(job)
 
+    def group_options(query, classification, sort):
+        if classification:
+            query = query.where(DuplicateGroup.classification == classification)
+        order = {
+            "discovered": [],
+            "exact_first": [case((DuplicateGroup.classification == "EXACT_DUPLICATE", 0), else_=1)],
+            "largest": [DuplicateGroup.recoverable.desc()],
+            "most_files": [DuplicateGroup.member_count.desc()],
+        }[sort]
+        return query.order_by(*order, DuplicateGroup.first_seen_at, DuplicateGroup.id)
+
     @app.get("/api/v1/scans/{scan_id}/matches")
-    def live_matches(scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(10, ge=1, le=50)):
+    def live_matches(
+        scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(10, ge=1, le=50),
+        classification: Literal["EXACT_DUPLICATE", "SIMILAR_CONTENT"] | None = None,
+        sort: Literal["discovered", "exact_first", "largest", "most_files"] = "discovered",
+    ):
         job = get_scan(scan_id)
         with sessions() as session:
             query = select(DuplicateGroup).where(
@@ -328,7 +347,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             rows = [
                 record(group)
                 for group in session.scalars(
-                    query.order_by(DuplicateGroup.first_seen_at, DuplicateGroup.id)
+                    group_options(query, classification, sort)
                     .offset(offset)
                     .limit(limit)
                 )
@@ -346,7 +365,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             )
             return {
                 "items": rows,
-                "total": sum(counts.values()),
+                "total": counts.get(classification, 0) if classification else sum(counts.values()),
                 "exact_groups": counts.get("EXACT_DUPLICATE", 0),
                 "similar_groups": counts.get("SIMILAR_CONTENT", 0),
                 "provisional": job["status"] != "completed",
@@ -482,7 +501,11 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             return FileResponse(path, media_type=file.mime_type)  # Starlette supports byte ranges.
 
     @app.get("/api/v1/groups")
-    def groups(scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
+    def groups(
+        scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100),
+        classification: Literal["EXACT_DUPLICATE", "SIMILAR_CONTENT"] | None = None,
+        sort: Literal["discovered", "exact_first", "largest", "most_files"] = "discovered",
+    ):
         with sessions() as session:
             query = select(DuplicateGroup).where(
                 DuplicateGroup.scan_id == scan_id,
@@ -492,12 +515,12 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "items": [
                     record(group)
                     for group in session.scalars(
-                        query.order_by(DuplicateGroup.first_seen_at, DuplicateGroup.id)
+                        group_options(query, classification, sort)
                         .offset(offset)
                         .limit(limit)
                     )
                 ],
-                "total": session.scalar(select(func.count()).select_from(query.subquery())),
+                "total": session.scalar(select(func.count()).select_from(group_options(query, classification, sort).subquery())),
             }
 
     @app.get("/api/v1/groups/{group_id}")
@@ -543,6 +566,15 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 keep_ids.add(file_id) if keep else keep_ids.discard(file_id)
             if not keep_ids <= ids:
                 raise ValueError("Keep IDs must belong to this group")
+            explicit_keep_none = value.keep_ids == [] or (
+                bool(group.evidence.get("allow_keep_none")) and not any(member.keep for member in members)
+            )
+            if (
+                group.classification == "EXACT_DUPLICATE"
+                and not explicit_keep_none
+                and not any(session.get(File, file_id).status == "ready" for file_id in keep_ids)
+            ):
+                raise ValueError("Keep at least one file in each exact-duplicate group")
             for member in members:
                 file = session.get(File, member.file_id)
                 if file.protected_reason and member.file_id not in keep_ids:
@@ -557,6 +589,9 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                             file_id=member.file_id, classification=group.classification, keep=member.keep
                         )
                     )
+            group.evidence = dict(group.evidence, allow_keep_none=value.keep_ids == [] or (
+                not keep_ids and bool(group.evidence.get("allow_keep_none"))
+            ))
             group.review_status = "reviewed"
         for file_id in ids:
             manager.save_folder_cache(group.scan_id, file_id)
@@ -579,7 +614,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     @app.post("/api/v1/cleanup/plan-selected", status_code=201)
     def plan_selected(value: SelectedPlanRequest):
         with manager.lock:
-            return record(cleanup.plan_selected(value.scan_id, value.destination))
+            return record(cleanup.plan_selected(value.scan_id, value.destination, value.classification))
 
     @app.post("/api/v1/cleanup/plan", status_code=201)
     def plan(value: PlanRequest):

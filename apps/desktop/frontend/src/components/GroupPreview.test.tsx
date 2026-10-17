@@ -57,10 +57,11 @@ it("navigates across group pages, zooms, and saves deletion choices without clea
     expect(JSON.parse(request![1]!.body as string)).toEqual({
       changes: { "200": false },
     });
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "ArrowLeft" });
+    document.body.focus();
+    fireEvent.keyDown(document.body, { key: "ArrowLeft" });
     expect(screen.getByText("photo-199.jpg")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Fit to screen" }));
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.keyDown(document.body, { key: "Escape" });
     expect(close).toHaveBeenCalledOnce();
     expect(fetch.mock.calls.some(([url]) => url.includes("/cleanup/"))).toBe(
       false,

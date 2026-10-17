@@ -1,3 +1,4 @@
+import { usePopupKeyboard } from "./usePopupKeyboard";
 import { ScanProgress } from "./ScanProgress";
 import { createContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -75,16 +76,14 @@ export function GroupPreview({
       prior?.focus();
     };
   }, []);
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  usePopupKeyboard(true, (event) => {
+    if (event.key === "Escape") onClose();
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      move(event.key === "ArrowLeft" ? -1 : 1);
+    }
+  });
   return createPortal(
     <div className="modal-backdrop group-preview-backdrop" onClick={onClose}>
       <section
@@ -96,19 +95,6 @@ export function GroupPreview({
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            onClose();
-          }
-          if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            move(-1);
-          }
-          if (event.key === "ArrowRight") {
-            event.preventDefault();
-            move(1);
-          }
           if (event.key === "+" || event.key === "=")
             setZoom((value) => Math.min(5, value + 0.25));
           if (event.key === "-") setZoom((value) => Math.max(1, value - 0.25));

@@ -273,7 +273,7 @@ def test_rebuilt_groups_restore_late_members_without_overwriting_new_choices(cli
     ids = {file["name"]: file["id"] for file in files}
     assert (
         client.post(
-            f"/api/v1/groups/{group['id']}/review", json={"changes": {ids["c.MOV"]: False}}
+            f"/api/v1/groups/{group['id']}/review", json={"changes": {ids["b.MOV"]: True, ids["c.MOV"]: False, ids["d.MOV"]: True}}
         ).status_code
         == 200
     )
@@ -422,3 +422,24 @@ def test_checkpoint_waits_for_worker_and_shutdown_preserves_resumable_scan(clien
         assert state["status"] == "completed", state
         assert state["processed"] == 3
         assert rehashed == ["waiting.mp4"]
+
+
+def test_exact_live_group_preselects_one_keeper_before_scan_finishes(client, workspace):
+    from app.grouping.live import LiveMatcher
+
+    for name in ["original.jpg", "original copy.jpg"]:
+        (workspace / name).write_bytes(b"identical")
+    job = scan(client, [workspace])
+    group = client.get(f"/api/v1/scans/{job['id']}/matches").json()["items"][0]
+    files = client.get(f"/api/v1/groups/{group['id']}").json()["files"]
+    matcher = LiveMatcher(client.app.state.sessions, job["id"], {"mode": "exact"}, lambda: None)
+    try:
+        for file in files:
+            matcher.add(file["id"])
+        live = client.get(f"/api/v1/scans/{job['id']}/matches").json()["items"][0]
+        members = client.get(f"/api/v1/groups/{live['id']}").json()["files"]
+        assert {file["name"]: file["keep"] for file in members} == {
+            "original.jpg": True, "original copy.jpg": False,
+        }
+    finally:
+        matcher.close()

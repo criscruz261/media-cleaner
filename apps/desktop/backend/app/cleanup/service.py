@@ -26,9 +26,35 @@ class CleanupService:
         rehash: bool,
         group_id: str | None = None,
         group_by_file: dict | None = None,
+        cleanup_ids: list[str] | None = None,
     ) -> list[dict]:
         if not ids or len(ids) != len(set(ids)):
             raise ValueError("Choose one or more distinct files")
+        selected_ids = cleanup_ids if cleanup_ids is not None else ids
+        # Check every affected exact group, including overlaps with similar groups.
+        exact_groups = session.scalars(
+            select(DuplicateGroup).join(GroupMember)
+            .where(DuplicateGroup.classification == "EXACT_DUPLICATE", GroupMember.file_id.in_(ids))
+            .distinct()
+        ).all()
+        for exact in exact_groups:
+            members = session.scalars(
+                select(GroupMember).join(File, File.id == GroupMember.file_id)
+                .where(GroupMember.group_id == exact.id, File.status == "ready")
+            ).all()
+            if (exact.review_status == "reviewed" and exact.evidence.get("allow_keep_none")
+                    and all(not member.keep and member.file_id in selected_ids for member in members)):
+                continue
+            survivors = session.scalars(
+                select(File).join(GroupMember, GroupMember.file_id == File.id)
+                .where(GroupMember.group_id == exact.id, GroupMember.keep.is_(True),
+                       File.status == "ready", File.id.not_in(selected_ids))
+            ).all()
+            retained = next((file for file in survivors
+                             if identity(Path(file.path)) == stored_identity(file)
+                             and (not rehash or hash_file(Path(file.path), stored_identity(file)) == file.sha256)), None)
+            if retained is None:
+                raise ValueError("Keep at least one verified file in each exact-duplicate group")
         active_id = session.scalar(select(ScanJob.id).where(ScanJob.status.in_(["running", "queued"])))
         items = []
         for file_id in ids:
@@ -76,6 +102,7 @@ class CleanupService:
             )
             remove_all = (
                 selected_group is not None and group.review_status == "reviewed" and kept_members is None
+                and (approximate or bool(group.evidence.get("allow_keep_none")))
             )
             if not keepers and not remove_all:
                 raise ValueError("Keep a verified file or explicitly review this group to keep none")
@@ -113,6 +140,23 @@ class CleanupService:
             raise ValueError("Choose Trash or same-volume quarantine; permanent deletion is unavailable")
         with self.sessions.begin() as session:
             items = self.validate(session, ids, rehash=False, group_id=group_id, group_by_file=group_by_file)
+            # Snapshot all members once per group so confirmation shows the exact plan,
+            # rather than polling changing review selections during a live scan.
+            snapshots = set()
+            for item in items:
+                if item["group_id"] in snapshots:
+                    continue
+                snapshots.add(item["group_id"])
+                files = session.scalars(
+                    select(File).join(GroupMember, GroupMember.file_id == File.id)
+                    .where(GroupMember.group_id == item["group_id"], File.status == "ready")
+                    .order_by(File.path)
+                )
+                item["review_files"] = [
+                    {"id": file.id, "name": file.name, "path": file.path,
+                     "size": file.size, "media_type": file.media_type}
+                    for file in files
+                ]
             operation = CleanupOperation(
                 destination=destination,
                 token=secrets.token_urlsafe(32),
@@ -125,7 +169,7 @@ class CleanupService:
             log.info("cleanup_planned")
             return operation
 
-    def plan_selected(self, scan_id: str, destination: str):
+    def plan_selected(self, scan_id: str, destination: str, classification: str | None = None):
         with self.sessions() as session:
             if not session.get(ScanJob, scan_id):
                 raise ValueError("Scan not found")
@@ -135,7 +179,10 @@ class CleanupService:
                 .join(File, File.id == GroupMember.file_id)
                 .where(
                     DuplicateGroup.scan_id == scan_id,
-                    DuplicateGroup.review_status == "reviewed",
+                    DuplicateGroup.review_status.not_in(["pending", "resolved"]),
+                    ((DuplicateGroup.review_status == "reviewed") |
+                     (DuplicateGroup.classification == "EXACT_DUPLICATE")),
+                    DuplicateGroup.classification == classification if classification else True,
                     GroupMember.keep.is_(False),
                     File.status == "ready",
                 )
@@ -181,7 +228,7 @@ class CleanupService:
                 file = session.get(File, file_id)
                 try:
                     # Recheck each item and its keeper immediately before moving.
-                    fresh = self.validate(session, [file_id], rehash=True, group_id=item.get("group_id"))
+                    fresh = self.validate(session, [file_id], rehash=True, group_id=item.get("group_id"), cleanup_ids=ids)
                     if fresh[0]["keeper_id"] != item["keeper_id"]:
                         raise ValueError("Retained copy changed after confirmation")
                     if destination == "quarantine":

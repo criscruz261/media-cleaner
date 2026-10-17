@@ -88,6 +88,24 @@ class LiveMatcher:
                 group.recoverable = file.size * (cluster["count"] - 1)
                 group.updated_at = now()
                 self.session.add(GroupMember(group_id=group.id, file_id=file.id, keep=True))
+                self.session.flush()
+                if group.review_status != "reviewed" and not any(
+                    (member.file_id, group.classification) in self.saved_choices
+                    for member in self.session.scalars(
+                        select(GroupMember).where(GroupMember.group_id == group.id)
+                    )
+                ):
+                    keeper, reason = recommendation(self.session.scalars(
+                        select(File).join(GroupMember, GroupMember.file_id == File.id)
+                        .where(GroupMember.group_id == group.id)
+                    ))
+                    group.recommended_id, group.recommendation = keeper, reason
+                    for member in self.session.scalars(
+                        select(GroupMember).where(GroupMember.group_id == group.id)
+                    ):
+                        item = self.session.get(File, member.file_id)
+                        member.keep = member.file_id == keeper or bool(item.protected_reason)
+
         self.session.get(ScanJob, self.scan_id).updated_at = now()
         self.session.commit()
         for (algorithm, version), matcher in self.matchers.items():

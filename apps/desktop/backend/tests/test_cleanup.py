@@ -205,20 +205,21 @@ def test_selected_batch_across_exact_similar_and_keep_none(client, workspace):
     reviewed = groups[:2]
     with client.app.state.sessions.begin() as session:
         session.get(DuplicateGroup, reviewed[1]["id"]).classification = "SIMILAR_CONTENT"
+        session.get(DuplicateGroup, groups[2]["id"]).classification = "SIMILAR_CONTENT"
     expected = []
     for group in reviewed:
         detail = client.get("/api/v1/groups/" + group["id"]).json()
-        expected.extend(file["path"] for file in detail["files"])
-        assert (
-            client.post("/api/v1/groups/" + group["id"] + "/review", json={"keep_ids": []}).status_code == 200
-        )
+        similar = detail["classification"] == "SIMILAR_CONTENT"
+        expected.extend(file["path"] for file in detail["files"] if similar or not file["keep"])
+        assert client.post("/api/v1/groups/" + group["id"] + "/review",
+                           json={"keep_ids": []} if similar else {"changes": {}}).status_code == 200
     response = client.post(
         "/api/v1/cleanup/plan-selected", json={"scan_id": job["id"], "destination": "quarantine"}
     )
     assert response.status_code == 201, response.text
     value = response.json()
     assert {item["source"] for item in value["items"]} == set(expected)
-    assert len(value["items"]) == 4
+    assert len(value["items"]) == 3
     assert execute(client, value, confirmed=False).status_code == 400
     assert all(Path(path).exists() for path in expected)
     result = execute(client, value)
@@ -231,7 +232,133 @@ def test_selected_batch_across_exact_similar_and_keep_none(client, workspace):
 
 
 def test_selected_batch_excludes_unreviewed_groups(client, workspace):
+    from app.database.models import DuplicateGroup
     group = duplicate_group(client, workspace)
+    with client.app.state.sessions.begin() as session:
+        session.get(DuplicateGroup, group["id"]).classification = "SIMILAR_CONTENT"
     response = client.post("/api/v1/cleanup/plan-selected", json={"scan_id": group["scan_id"]})
     assert response.status_code == 400
     assert all(Path(file["path"]).exists() for file in group["files"])
+
+
+def test_group_filters_global_sort_and_scoped_batch(client, workspace):
+    from conftest import scan
+    from app.database.models import DuplicateGroup
+
+    for name, data in [("a.MOV", b"one"), ("a copy.MOV", b"one"),
+                       ("b.MOV", b"longer data"), ("b copy.MOV", b"longer data")]:
+        (workspace / name).write_bytes(data)
+    job = scan(client, [workspace])
+    url = "/api/v1/groups?scan_id=" + job["id"]
+    found = client.get(url).json()["items"]
+    smaller, larger = sorted(found, key=lambda group: group["recoverable"])
+    with client.app.state.sessions.begin() as session:
+        session.get(DuplicateGroup, larger["id"]).classification = "SIMILAR_CONTENT"
+    for group in found:
+        assert client.post("/api/v1/groups/" + group["id"] + "/review", json={"changes": {}}).status_code == 200
+    for base in [url, f"/api/v1/scans/{job['id']}/matches?unused=1"]:
+        result = client.get(base + "&classification=EXACT_DUPLICATE&limit=1").json()
+        assert result["total"] == 1
+        assert result["items"][0]["id"] == smaller["id"]
+        assert client.get(base + "&sort=largest&limit=1").json()["items"][0]["id"] == larger["id"]
+        assert client.get(base + "&sort=exact_first&limit=1").json()["items"][0]["id"] == smaller["id"]
+        assert client.get(base + "&sort=exact_first&offset=1&limit=1").json()["items"][0]["id"] == larger["id"]
+        assert client.get(base + "&classification=wrong").status_code == 422
+    plan = client.post("/api/v1/cleanup/plan-selected", json={
+        "scan_id": job["id"], "classification": "EXACT_DUPLICATE", "destination": "quarantine",
+    })
+    assert plan.status_code == 201, plan.text
+    assert len(plan.json()["items"]) == 1
+    assert {item["group_id"] for item in plan.json()["items"]} == {smaller["id"]}
+    outcome = execute(client, plan.json())
+    assert outcome.json()["status"] == "completed"
+    similar = client.get("/api/v1/groups/" + larger["id"]).json()
+    assert all(Path(file["path"]).exists() for file in similar["files"])
+
+
+def test_exact_group_rejects_removing_last_keeper_and_legacy_keep_none(client, workspace):
+    from app.database.models import GroupMember
+    from sqlalchemy import select
+
+    group = duplicate_group(client, workspace)
+    keeper = next(file for file in group["files"] if file["keep"])
+    for payload in [{"changes": {keeper["id"]: False}}]:
+        response = client.post("/api/v1/groups/" + group["id"] + "/review", json=payload)
+        assert response.status_code == 400
+        assert "at least one" in response.text
+    # A legacy saved keep-none selection must not bypass cleanup validation.
+    with client.app.state.sessions.begin() as session:
+        for member in session.scalars(select(GroupMember).where(GroupMember.group_id == group["id"])):
+            member.keep = False
+    response = client.post("/api/v1/cleanup/plan", json={
+        "group_id": group["id"], "file_ids": [file["id"] for file in group["files"]],
+    })
+    assert response.status_code == 400
+    assert all(Path(file["path"]).exists() for file in group["files"])
+
+
+def test_exact_keeper_can_be_changed_by_keeping_another_copy_first(client, workspace):
+    group = duplicate_group(client, workspace)
+    keeper = next(file for file in group["files"] if file["keep"])
+    other = next(file for file in group["files"] if not file["keep"])
+    url = "/api/v1/groups/" + group["id"] + "/review"
+    assert client.post(url, json={"changes": {other["id"]: True}}).status_code == 200
+    assert client.post(url, json={"changes": {keeper["id"]: False}}).status_code == 200
+    assert client.post(url, json={"changes": {other["id"]: False}}).status_code == 400
+    assert client.post(url, json={"keep_ids": []}).status_code == 200
+    assert client.post(url, json={"changes": {}}).status_code == 200
+    assert client.post(url, json={"changes": {other["id"]: True}}).status_code == 200
+    assert client.post(url, json={"changes": {other["id"]: False}}).status_code == 400
+
+
+def test_similar_group_cannot_bypass_exact_keeper_guard(client, workspace):
+    from app.database.models import DuplicateGroup, GroupMember
+
+    exact = duplicate_group(client, workspace)
+    with client.app.state.sessions.begin() as session:
+        similar = DuplicateGroup(scan_id=exact["scan_id"], classification="SIMILAR_CONTENT",
+                                 recommendation="Test", evidence={}, member_count=2, recoverable=1)
+        session.add(similar)
+        session.flush()
+        similar_id = similar.id
+        for file in exact["files"]:
+            session.add(GroupMember(group_id=similar_id, file_id=file["id"], keep=True))
+    assert client.post(f"/api/v1/groups/{similar_id}/review", json={"keep_ids": []}).status_code == 200
+    request = {"file_ids": [file["id"] for file in exact["files"]],
+               "group_id": similar_id, "destination": "quarantine"}
+    assert client.post("/api/v1/cleanup/plan", json=request).status_code == 400
+    assert client.post(f"/api/v1/groups/{exact['id']}/review", json={"keep_ids": []}).status_code == 200
+    response = client.post("/api/v1/cleanup/plan", json=request)
+    assert response.status_code == 201, response.text
+    assert all(Path(file["path"]).exists() for file in exact["files"])
+
+
+def test_batch_includes_preselected_exact_copies_without_review_step(client, workspace):
+    group = duplicate_group(client, workspace)
+    response = client.post("/api/v1/cleanup/plan-selected", json={
+        "scan_id": group["scan_id"], "classification": "EXACT_DUPLICATE", "destination": "quarantine",
+    })
+    assert response.status_code == 201, response.text
+    selected = [file["id"] for file in group["files"] if not file["keep"]]
+    assert [item["file_id"] for item in response.json()["items"]] == selected
+    assert all(Path(file["path"]).exists() for file in group["files"])
+
+
+def test_cleanup_snapshots_all_group_members_including_multiple_kept_files(client, workspace):
+    from conftest import scan
+
+    for name in ["a.MOV", "b.MOV", "c.MOV"]:
+        (workspace / name).write_bytes(b"same contents")
+    job = scan(client, [workspace])
+    group = client.get(f"/api/v1/groups?scan_id={job['id']}").json()["items"][0]
+    detail = client.get(f"/api/v1/groups/{group['id']}").json()
+    files = detail["files"]
+    assert client.post(f"/api/v1/groups/{group['id']}/review", json={
+        "keep_ids": [files[0]["id"], files[1]["id"]],
+    }).status_code == 200
+    response = client.post("/api/v1/cleanup/plan-selected", json={"scan_id": job["id"]})
+    assert response.status_code == 201, response.text
+    item = response.json()["items"][0]
+    assert item["file_id"] == files[2]["id"]
+    assert {file["id"] for file in item["review_files"]} == {file["id"] for file in files}
+    assert {file["path"] for file in item["review_files"]} == {file["path"] for file in files}

@@ -23,7 +23,7 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | GET /files/{id} | Identity, status, metadata and warnings |
 | GET /files/{id}/thumbnail | Small JPEG still/video poster; identity checked, bounded in-memory cache |
 | GET /files/{id}/preview | Normalized image preview or range-capable original video |
-| GET /groups?scan_id=... | Paginated unresolved exact/similar groups, ordered by savings |
+| GET /groups?scan_id=... | Paginated unresolved exact/similar groups; optional classification filter and sort |
 | GET /groups/{id} | Paginated current members and saved keep choices |
 | POST /groups/{id}/review | Set `keep_ids` or partial `changes:{file_id:boolean}`; empty `keep_ids:[]` selects the entire group for deletion; protected assets must stay kept |
 | POST /cleanup/plan | Dry run for `file_ids`, `group_id` (required for approximate groups), destination `trash` or `quarantine` |
@@ -45,3 +45,11 @@ The `similar` mode now compares still photos/RAW and video/animation sequences. 
 `POST /scans/{id}/checkpoint` pauses a scan and waits for its worker to stop before returning the saved checkpoint. Resume with `POST /scans/{id}/resume`. The legacy `/pause` action requests a pause without waiting.
 
 `POST /app/shutdown` requires `{"confirmed":true}`. It prevents new work, waits for active cleanup, pauses active scans, joins scan workers, commits checkpoint state, then requests graceful server shutdown after sending the response. Available for the server launched through `./run.sh`; custom hosts must provide a shutdown callback. The frontend stops polling and displays a safe-to-close page.
+
+Group filtering and batch cleanup: `GET /groups` and `GET /scans/{id}/matches` accept optional `classification=EXACT_DUPLICATE|SIMILAR_CONTENT` and `sort=discovered|exact_first|largest|most_files` (default `discovered`). Filtering and sorting happen before pagination; `total` reflects the filter, while live exact/similar counts still describe the whole scan. Discovery order appends newly published groups; other sorts can move groups as scanning adds members.
+
+`POST /groups/{id}/review` with `{ "changes": {} }` accepts the current selections and marks the group reviewed without toggling a file. `POST /cleanup/plan-selected` accepts optional `classification` with the same values. It includes selected exact copies (including automatic defaults) and reviewed similar groups matching that classification across all pages. Omitting it includes both classifications. The frontend batch scope follows its group filter. Duplicate Review checkboxes mean selected for deletion and save changes immediately; no separate mark-reviewed button is required. Every batch still opens a dry-run preview and requires confirmation before moving files.
+
+Exact-duplicate review requires at least one ready keeper for ordinary checkbox changes. Explicit `keep_ids: []` (the “Select all for deletion” action) authorizes keeping none for that group. Keeping any member again clears this exception. Cleanup validates retained copies across overlapping exact groups at preview and execution; removing an entire exact group requires its explicit keep-none selection and all members in the cleanup. Protected-file restrictions and final confirmation still apply.
+
+Cleanup plan items include optional `review_files` once per group: a saved snapshot of every ready member (`id`, `name`, `path`, `size`, `media_type`). The read-only confirmation partitions that snapshot using all planned deletion IDs, with kept files on the left in green and deletions on the right in red. It shows all retained members, not just the single verification keeper. Older plans without snapshots fall back to their recorded source/keeper paths.

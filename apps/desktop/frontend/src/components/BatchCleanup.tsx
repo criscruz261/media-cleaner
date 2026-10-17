@@ -7,8 +7,10 @@ import { ErrorMessage } from "./ui";
 export function BatchCleanup({
   scanId,
   onPlan,
+  classification = "",
 }: {
   scanId: string;
+  classification?: "" | "EXACT_DUPLICATE" | "SIMILAR_CONTENT";
   onPlan: (plan: Cleanup) => void;
 }) {
   const [destination, setDestination] = useState<"trash" | "quarantine">(
@@ -17,7 +19,11 @@ export function BatchCleanup({
   const pendingChanges = useIsMutating();
   const plan = useMutation({
     mutationFn: () =>
-      api<Cleanup>("/cleanup/plan-selected", { scan_id: scanId, destination }),
+      api<Cleanup>("/cleanup/plan-selected", {
+        scan_id: scanId,
+        destination,
+        ...(classification ? { classification } : {}),
+      }),
     onSuccess: (preview) => onPlan(preview),
   });
   return (
@@ -25,8 +31,18 @@ export function BatchCleanup({
       <h2>Clean up across groups</h2>
       <p>
         Select unwanted files in multiple groups, then preview all selections
-        together. Includes reviewed groups across every page of this scan.
-        Unreviewed recommendations are excluded.
+        together. Includes selected exact copies and your saved selections in
+        similar groups across every page matching the current group filter.
+      </p>
+      <p>
+        Scope:{" "}
+        {classification === "EXACT_DUPLICATE"
+          ? "Exact duplicates only"
+          : classification === "SIMILAR_CONTENT"
+            ? "Similar media only"
+            : "All matches"}
+        . Checkbox changes are saved automatically. Exact-copy defaults are
+        included; similar media requires your selection.
       </p>
       <div className="group-actions">
         <select
