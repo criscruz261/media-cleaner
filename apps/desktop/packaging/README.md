@@ -24,4 +24,11 @@ The planned release shell is Tauri 2. It must spawn a bundled, per-platform Pyth
 
 For packaged builds, use a per-platform PyInstaller (or equivalent validated Python bundling) build to include Python, Pillow/HEIF libraries and backend modules plus Alembic migrations, with separately licensed FFmpeg/FFprobe and ExifTool resources. Users must not need to install Python manually in release builds. Sign and notarize macOS arm64/x64 bundles, sign Windows installers, and build/test Linux packages against supported glibc versions. Codec licenses, executable signatures, updates, native Trash behavior, external drives and uninstall retention need release validation.
 
-The supplied scripts are development installation, not a claim that the desktop packaging acceptance criteria are met.
+Portable bundles still require clean-machine and release validation before public distribution.
+
+## macOS app build
+
+See [the macOS workflow](../platforms/macos/README.md). Run
+`./scripts/macOS/1-setup.sh`, then
+`./scripts/macOS/4-create-deploy-package.sh` to create the self-contained,
+ad-hoc signed `deployment-package/macOS/MediaCleaner.app`.

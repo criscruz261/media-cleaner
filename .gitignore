@@ -77,3 +77,6 @@ Desktop.ini
 
 # Shared JVM matching module outputs
 /shared/matching/build/
+
+/deployment-package/macOS/*
+!/deployment-package/macOS/.gitkeep

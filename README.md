@@ -41,6 +41,13 @@ macOS / Linux:
 ./run.sh
 ```
 
+For the numbered macOS workflow, use `./scripts/macOS/1-setup.sh`,
+`./scripts/macOS/2-build.sh`, then `./scripts/macOS/3-run.sh`.
+`./scripts/macOS/4-create-deploy-package.sh` builds a self-contained
+`deployment-package/macOS/MediaCleaner.app` for another Mac of the same CPU
+architecture with the same or a newer macOS version. See the
+[macOS build and packaging guide](apps/desktop/platforms/macos/README.md).
+
 Windows PowerShell:
 
 ```powershell
