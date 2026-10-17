@@ -230,6 +230,19 @@ final class Store extends SQLiteOpenHelper {
     touch();
   }
 
+  synchronized boolean reviewed(Group group) {
+    for (Media file : group.files()) {
+      try (Cursor c =
+          getReadableDatabase()
+              .rawQuery(
+                  "SELECT 1 FROM choices WHERE uri=? AND identity=? AND classification=?",
+                  new String[] {file.uri, file.identity, group.classification()})) {
+        if (c.moveToFirst()) return true;
+      }
+    }
+    return false;
+  }
+
   synchronized void selectAll(String groupId) {
     Group group = group(groupId);
     if (group == null) throw new IllegalArgumentException("Group changed. Reopen review.");

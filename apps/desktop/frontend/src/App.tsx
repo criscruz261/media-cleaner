@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
@@ -31,6 +31,22 @@ const pages = [
   ["Settings", SettingsIcon],
 ] as const;
 export function App() {
+  const [sidebar, setSidebar] = useState(() => {
+    try {
+      const value = JSON.parse(
+        localStorage.getItem("media-cleaner.sidebar") ?? "null",
+      );
+      return {
+        width: Math.min(420, Math.max(200, Number(value?.width) || 244)),
+        collapsed: value?.collapsed === true,
+      };
+    } catch {
+      return { width: 244, collapsed: false };
+    }
+  });
+  useEffect(() => {
+    saveLocal("media-cleaner.sidebar", sidebar);
+  }, [sidebar]);
   const [saved] = useState(loadWorkspace);
   const [connected, setConnected] = useState(false),
     [token, setToken] = useState(""),
@@ -150,8 +166,73 @@ export function App() {
       </main>
     );
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${sidebar.collapsed ? "sidebar-collapsed" : ""}`}
+      style={
+        {
+          "--sidebar-width": `${sidebar.collapsed ? 76 : sidebar.width}px`,
+        } as CSSProperties
+      }
+    >
       <aside className="sidebar">
+        <button
+          className="sidebar-toggle"
+          aria-label={sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebar.collapsed}
+          onClick={() =>
+            setSidebar((value) => ({ ...value, collapsed: !value.collapsed }))
+          }
+        >
+          {sidebar.collapsed ? "»" : "«"}
+        </button>
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-label="Resize sidebar"
+          aria-orientation="vertical"
+          aria-valuemin={200}
+          aria-valuemax={420}
+          aria-valuenow={sidebar.width}
+          tabIndex={sidebar.collapsed ? -1 : 0}
+          onPointerDown={(event) => {
+            if (!sidebar.collapsed)
+              event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              setSidebar({
+                collapsed: false,
+                width: Math.min(420, Math.max(200, event.clientX)),
+              });
+          }}
+          onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onKeyDown={(event) => {
+            if (
+              ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+            ) {
+              event.preventDefault();
+              setSidebar((value) => ({
+                ...value,
+                width:
+                  event.key === "Home"
+                    ? 200
+                    : event.key === "End"
+                      ? 420
+                      : Math.min(
+                          420,
+                          Math.max(
+                            200,
+                            value.width +
+                              (event.key === "ArrowRight" ? 16 : -16),
+                          ),
+                        ),
+              }));
+            }
+          }}
+        />
         <a
           className="brand"
           href="#"
@@ -172,12 +253,16 @@ export function App() {
           {pages.map(([name, Icon]) => (
             <button
               key={name}
+              aria-label={name === "Review" ? "Duplicate review" : name}
+              title={name === "Review" ? "Duplicate review" : name}
               className={page === name ? "active" : ""}
               onClick={() => setPage(name)}
               aria-current={page === name ? "page" : undefined}
             >
               <Icon size={19} />
-              {name === "Review" ? "Duplicate review" : name}
+              <span className="nav-text">
+                {name === "Review" ? "Duplicate review" : name}
+              </span>
             </button>
           ))}
         </nav>

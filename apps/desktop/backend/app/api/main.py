@@ -8,7 +8,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, func, case
-from app.api.schemas import ScanRequest, ReviewRequest, PlanRequest, ExecuteRequest, RestoreRequest
+from app.api.schemas import (
+    SelectedPlanRequest,
+    ScanRequest,
+    ReviewRequest,
+    PlanRequest,
+    ExecuteRequest,
+    RestoreRequest,
+)
 from app.core.config import Settings, data_directory, authentication_token
 from app.core.filesystem import identity, stored_identity
 from app.core.logging import configure
@@ -538,6 +545,11 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
         for file_id in ids:
             manager.save_folder_cache(group.scan_id, file_id)
         return {"saved": True}
+
+    @app.post("/api/v1/cleanup/plan-selected", status_code=201)
+    def plan_selected(value: SelectedPlanRequest):
+        with manager.lock:
+            return record(cleanup.plan_selected(value.scan_id, value.destination))
 
     @app.post("/api/v1/cleanup/plan", status_code=201)
     def plan(value: PlanRequest):

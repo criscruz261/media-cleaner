@@ -30,3 +30,8 @@ class ExecuteRequest(BaseModel):
 
 class RestoreRequest(BaseModel):
     confirmed: bool = False
+
+
+class SelectedPlanRequest(BaseModel):
+    scan_id: str
+    destination: Literal["trash", "quarantine"] = "trash"

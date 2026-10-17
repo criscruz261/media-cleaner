@@ -14,6 +14,8 @@ The project-local Python environment and production frontend have been prepared:
 
 Open the launch link printed in the terminal. It includes a local access token in the URL fragment, which is removed after connecting and exchanged for an HttpOnly, SameSite cookie. Do not share the launch link. Stop with Ctrl+C. Use `./run.sh --port 9000` or `./run.sh --data-dir /absolute/local/app-data` to override defaults.
 
+To clean up multiple groups on desktop, make your selections in **Matches found so far** or **Review**, then choose **Delete selected across groups**. The combined preview includes reviewed groups across every page of the selected scan and requires confirmation before moving files.
+
 ## Android build
 
 A standalone Android 11+ app is available under [apps/android](apps/android/README.md), with native media access, offline scanning, thumbnails, video comparison, saved checkpoints and system-confirmed Trash/restore. On a fresh macOS Apple Silicon clone, install Python 3.12+ and curl, then run `./setup-android.sh` and `./build-android.sh`. Setup keeps its tools in ignored `.tools/android`; the build finds them automatically. Other hosts can configure JDK 21 and Android SDK 35 manually before running the build script. The installable debug APK is generated at `apps/android/app/build/outputs/apk/debug/app-debug.apk`. This is a testing build, not a Play Store release.

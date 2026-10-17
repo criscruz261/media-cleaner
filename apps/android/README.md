@@ -9,6 +9,8 @@ A standalone, offline native Android app for Android 11+ (API 30+). It does not 
 3. Watch live groups, file progress, cache reuse and skipped-file warnings. **Pause** and **Resume** preserve completed-file checkpoints. Closing the activity does not stop the foreground scan; a process restart leaves the job available for explicit Resume.
 4. Inspect thumbnails and full previews. **Compare similar videos** provides muted playback, shared play/pause/reset and deletion checkboxes. It pages through up to four simultaneous players to respect phone decoder limits. Unmute individual players to check audio.
 5. Select unwanted files in a group and choose **Delete selected**. Use **Select all for deletion (keep none)** to remove the whole group; RAW and possible photo/video companion files are protected. Similar groups initially keep every item. Unambiguous copy filenames receive an advisory original recommendation after completion; explicit choices take priority.
+For multiple groups, make selections in each, then use **Delete selected across groups** above the groups. This includes reviewed groups outside the visible page and excludes untouched suggestions. One combined preview and Android confirmation covers up to 100 distinct files, including keep-none groups.
+
 6. Review the selected filenames and retained file (or the **Keep none** notice), check the confirmation box, then continue. The app freshly hashes selected files and their retained copy before opening Android's own Trash confirmation. Scanning pauses for this workflow and resumes afterward when it was running. Cancelling does not move files. There is no permanent-delete operation.
 7. **Cleanup and recovery** records the outcome and can request Android confirmation to restore items from Trash. Availability and retention are controlled by the device; gallery Trash is another recovery route. Rescan restored files to include them again.
 
@@ -75,3 +77,5 @@ Large groups are limited in visible UI, and comparison uses four players per pag
 ```
 
 Screenshots are written to ignored `.tools/android/smoke`. Do not point tests at personal media or a physical device. The existing desktop app and Windows files remain separate under `apps/desktop`.
+
+Tap a group thumbnail to open a screen-fitting preview. **Previous/Next** navigates the full group, **Select for deletion** saves the same choice used by group and batch cleanup, and **Fit to screen** resets zoom. Photos support pinch zoom and drag panning as well as zoom buttons. Videos play in the preview with playback controls. Navigation resets zoom and stops the previous video.

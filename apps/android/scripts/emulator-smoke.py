@@ -233,6 +233,22 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     db.close()
     print("Checking comparison playback and saved selection", flush=True)
     launch()
+    tap(find("Thumbnail of trip.png", scroll=True, timeout=35))
+    find("Close preview")
+    tap(find("Zoom in"))
+    tap(find("Fit to screen"))
+    tap(find("Previous", button=True))
+    tap(find("Next", button=True))
+    previewChoice = find("Select for deletion")
+    wasSelected = previewChoice.get("checked")
+    tap(previewChoice)
+    assert find("Select for deletion").get("checked") != wasSelected
+    tap(find("Select for deletion"))
+    assert find("Select for deletion").get("checked") == wasSelected
+    screenshot("group-preview.png")
+    tap(find("Close preview"))
+    # Select the photo group just previewed, then independently review the video group.
+    tap(find("Select all for deletion (keep none)", scroll=True, timeout=35))
     tap(find("Compare similar videos", scroll=True, timeout=40))
     find("Play all")
     screenshot("video-comparison.png")
@@ -249,14 +265,25 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     tap(find("Cancel"))
     tap(find("Select all for deletion (keep none)", scroll=True, timeout=35))
     tap(find("Delete selected videos (2)", scroll=True, timeout=35))
-    print("Checking app and Android cleanup confirmations", flush=True)
+    print(
+        "Checking one combined preview and Android confirmation across groups",
+        flush=True,
+    )
+    tap(find("Cancel"))
+    # Wait until the cancellation is saved and the underlying group is visible.
+    find("Delete selected videos (2)", scroll=True, timeout=35)
+    adb("shell", "am", "force-stop", PACKAGE)
+    launch()
+    tap(find("Delete selected across groups", scroll=True, timeout=35))
+    # Photo groups may be ordered as exact (two) or similar (three).
+    selected_count = int(
+        find("files will move to Android Trash").get("text").split()[0]
+    )
+    assert selected_count in (4, 5), selected_count
     confirm = find("Continue to Android confirmation")
     assert confirm.get("enabled") == "false", "Cleanup confirmation was bypassed"
     screenshot("cleanup-preview.png")
-    tap(find("Cancel"))
-    tap(find("Delete selected videos (2)", scroll=True, timeout=35))
-    find("Confirm group cleanup")
-    tap(find("I reviewed these files"))
+    tap(find("I reviewed these files", scroll=True))
     tap(find("Continue to Android confirmation"))
     # This is the Android MediaProvider dialog, not an application confirmation.
     system_tree = tree()
@@ -271,6 +298,11 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     find("trashed ·", scroll=True, timeout=30)
     assert "clip-reencoded.mp4" not in adb("shell", "ls", gallery).splitlines()
     assert "clip-original.mp4" not in adb("shell", "ls", gallery).splitlines()
+    assert "trip.png" not in adb("shell", "ls", gallery).splitlines()
+    assert "trip copy.png" not in adb("shell", "ls", gallery).splitlines()
+    assert ("trip resized.jpg" in adb("shell", "ls", gallery).splitlines()) == (
+        selected_count == 4
+    )
     screenshot("cleanup-history.png")
     tap(find("Restore from Trash"))
     tap(find("Continue"))
@@ -278,6 +310,9 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     find("restored ·", scroll=True, timeout=30)
     assert "clip-reencoded.mp4" in adb("shell", "ls", gallery).splitlines()
     assert "clip-original.mp4" in adb("shell", "ls", gallery).splitlines()
+    assert "trip.png" in adb("shell", "ls", gallery).splitlines()
+    assert "trip copy.png" in adb("shell", "ls", gallery).splitlines()
+    assert "trip resized.jpg" in adb("shell", "ls", gallery).splitlines()
     screenshot("restored.png")
 print(
     "Android emulator smoke passed: real photo/video matching, saved checkpoints, comparison selections, explicit confirmation, Android Trash, restore."

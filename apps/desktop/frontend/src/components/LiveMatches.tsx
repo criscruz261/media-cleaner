@@ -1,3 +1,4 @@
+import { BatchCleanup } from "./BatchCleanup";
 import { GroupCard } from "../pages/Review";
 import type { Cleanup } from "../types/api";
 import { useState } from "react";
@@ -58,6 +59,7 @@ export function LiveMatches({
           </p>
         </div>
       )}
+      {onPlan && <BatchCleanup scanId={scanId} onPlan={onPlan} />}
       {matches.data?.items.length ? (
         matches.data.items.map((group) =>
           onPlan ? (

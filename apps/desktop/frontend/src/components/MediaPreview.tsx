@@ -5,9 +5,11 @@ import type { MediaFile } from "../types/api";
 export function MediaPreview({
   file,
   thumbnailFirst = false,
+  onOpen,
 }: {
   file: MediaFile;
   thumbnailFirst?: boolean;
+  onOpen?: () => void;
 }) {
   const [playing, setPlaying] = useState(false);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
@@ -53,7 +55,7 @@ export function MediaPreview({
           <button
             className="image-button"
             aria-label={`Enlarge ${file.name}`}
-            onClick={() => setZoom(true)}
+            onClick={() => (onOpen ? onOpen() : setZoom(true))}
           >
             <img
               loading="lazy"
@@ -65,13 +67,20 @@ export function MediaPreview({
           </button>
         )}
       </div>
-      <a className="small-link" href={url} target="_blank" rel="noreferrer">
-        Open preview <ExternalLink size={12} />
-      </a>
+      {onOpen ? (
+        <button className="small-link" onClick={onOpen}>
+          Open group preview
+        </button>
+      ) : (
+        <a className="small-link" href={url} target="_blank" rel="noreferrer">
+          Open preview <ExternalLink size={12} />
+        </a>
+      )}
       {zoom && (
         <div className="modal-backdrop" onClick={() => setZoom(false)}>
           <section
             className="zoom-modal"
+            onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
             aria-label={file.name}

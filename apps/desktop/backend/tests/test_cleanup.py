@@ -185,3 +185,53 @@ def test_keep_none_preview_invalidated_when_choices_change(client, workspace):
     client.post("/api/v1/groups/" + group["id"] + "/review", json={"keep_ids": [group["files"][0]["id"]]})
     assert execute(client, value).status_code == 400
     assert all(Path(file["path"]).exists() for file in group["files"])
+
+
+def test_selected_batch_across_exact_similar_and_keep_none(client, workspace):
+    from conftest import scan
+    from app.database.models import DuplicateGroup
+
+    for name, content in [
+        ("a.MOV", b"first"),
+        ("a copy.MOV", b"first"),
+        ("b.MOV", b"second"),
+        ("b copy.MOV", b"second"),
+        ("c.MOV", b"untouched"),
+        ("c copy.MOV", b"untouched"),
+    ]:
+        (workspace / name).write_bytes(content)
+    job = scan(client, [workspace])
+    groups = client.get("/api/v1/groups?scan_id=" + job["id"]).json()["items"]
+    reviewed = groups[:2]
+    with client.app.state.sessions.begin() as session:
+        session.get(DuplicateGroup, reviewed[1]["id"]).classification = "SIMILAR_CONTENT"
+    expected = []
+    for group in reviewed:
+        detail = client.get("/api/v1/groups/" + group["id"]).json()
+        expected.extend(file["path"] for file in detail["files"])
+        assert (
+            client.post("/api/v1/groups/" + group["id"] + "/review", json={"keep_ids": []}).status_code == 200
+        )
+    response = client.post(
+        "/api/v1/cleanup/plan-selected", json={"scan_id": job["id"], "destination": "quarantine"}
+    )
+    assert response.status_code == 201, response.text
+    value = response.json()
+    assert {item["source"] for item in value["items"]} == set(expected)
+    assert len(value["items"]) == 4
+    assert execute(client, value, confirmed=False).status_code == 400
+    assert all(Path(path).exists() for path in expected)
+    result = execute(client, value)
+    assert result.status_code == 200, result.text
+    assert result.json()["status"] == "completed", result.text
+    assert all(not Path(path).exists() for path in expected)
+    restored = client.post("/api/v1/cleanup/" + value["id"] + "/restore", json={"confirmed": True})
+    assert restored.json()["status"] == "restored"
+    assert all(Path(path).exists() for path in expected)
+
+
+def test_selected_batch_excludes_unreviewed_groups(client, workspace):
+    group = duplicate_group(client, workspace)
+    response = client.post("/api/v1/cleanup/plan-selected", json={"scan_id": group["scan_id"]})
+    assert response.status_code == 400
+    assert all(Path(file["path"]).exists() for file in group["files"])

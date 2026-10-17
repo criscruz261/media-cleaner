@@ -19,12 +19,20 @@ class CleanupService:
         self.sessions = sessions
         self.settings = settings
 
-    def validate(self, session, ids: list[str], rehash: bool, group_id: str | None = None) -> list[dict]:
+    def validate(
+        self,
+        session,
+        ids: list[str],
+        rehash: bool,
+        group_id: str | None = None,
+        group_by_file: dict | None = None,
+    ) -> list[dict]:
         if not ids or len(ids) != len(set(ids)):
             raise ValueError("Choose one or more distinct files")
         active_id = session.scalar(select(ScanJob.id).where(ScanJob.status.in_(["running", "queued"])))
         items = []
         for file_id in ids:
+            selected_group = (group_by_file or {}).get(file_id, group_id)
             file = session.get(File, file_id)
             if not file or file.status != "ready" or not file.sha256:
                 raise ValueError("File is unavailable or not a verified duplicate")
@@ -36,14 +44,14 @@ class CleanupService:
                 .where(GroupMember.file_id == file_id)
                 .order_by(DuplicateGroup.classification)
             )
-            if group_id:
-                membership_query = membership_query.where(GroupMember.group_id == group_id)
+            if selected_group:
+                membership_query = membership_query.where(GroupMember.group_id == selected_group)
             member = session.scalar(membership_query.limit(1))
             if not member or member.keep:
                 raise ValueError("Only files explicitly unchecked during review may be cleaned up")
             group = session.get(DuplicateGroup, member.group_id)
             approximate = group.classification != "EXACT_DUPLICATE"
-            if approximate and (not group_id or group.review_status != "reviewed"):
+            if approximate and (not selected_group or group.review_status != "reviewed"):
                 raise ValueError("Similar photos require manual review and an explicit group cleanup plan")
             path = Path(file.path)
             reason = file.protected_reason or protection(path, self.settings().protected_directories)
@@ -66,7 +74,9 @@ class CleanupService:
                 .where(GroupMember.group_id == member.group_id, GroupMember.keep.is_(True))
                 .limit(1)
             )
-            remove_all = group_id is not None and group.review_status == "reviewed" and kept_members is None
+            remove_all = (
+                selected_group is not None and group.review_status == "reviewed" and kept_members is None
+            )
             if not keepers and not remove_all:
                 raise ValueError("Keep a verified file or explicitly review this group to keep none")
             keeper = next(
@@ -96,11 +106,13 @@ class CleanupService:
             )
         return items
 
-    def plan(self, ids: list[str], destination: str, group_id: str | None = None):
+    def plan(
+        self, ids: list[str], destination: str, group_id: str | None = None, group_by_file: dict | None = None
+    ):
         if destination not in {"trash", "quarantine"}:
             raise ValueError("Choose Trash or same-volume quarantine; permanent deletion is unavailable")
         with self.sessions.begin() as session:
-            items = self.validate(session, ids, rehash=False, group_id=group_id)
+            items = self.validate(session, ids, rehash=False, group_id=group_id, group_by_file=group_by_file)
             operation = CleanupOperation(
                 destination=destination,
                 token=secrets.token_urlsafe(32),
@@ -112,6 +124,29 @@ class CleanupService:
             session.flush()
             log.info("cleanup_planned")
             return operation
+
+    def plan_selected(self, scan_id: str, destination: str):
+        with self.sessions() as session:
+            if not session.get(ScanJob, scan_id):
+                raise ValueError("Scan not found")
+            rows = session.execute(
+                select(GroupMember.file_id, GroupMember.group_id)
+                .join(DuplicateGroup, DuplicateGroup.id == GroupMember.group_id)
+                .join(File, File.id == GroupMember.file_id)
+                .where(
+                    DuplicateGroup.scan_id == scan_id,
+                    DuplicateGroup.review_status == "reviewed",
+                    GroupMember.keep.is_(False),
+                    File.status == "ready",
+                )
+                .order_by(DuplicateGroup.classification, GroupMember.group_id)
+            ).all()
+            groups = {}
+            for file_id, group_id in rows:
+                groups.setdefault(file_id, group_id)
+            if len(groups) > 1000:
+                raise ValueError("Choose at most 1,000 files per cleanup")
+        return self.plan(list(groups), destination, group_by_file=groups)
 
     def execute(self, operation_id: str, token: str, confirmed: bool):
         with self.sessions.begin() as session:
@@ -127,9 +162,12 @@ class CleanupService:
                 raise ValueError("Cleanup plan expired; create a new preview")
             ids = [item["file_id"] for item in operation.items]
             # Whole-plan validation completes before any filesystem mutation.
-            group_ids = {item.get("group_id") for item in operation.items}
-            group_id = next(iter(group_ids)) if len(group_ids) == 1 else None
-            fresh = self.validate(session, ids, rehash=True, group_id=group_id)
+            fresh = self.validate(
+                session,
+                ids,
+                rehash=True,
+                group_by_file={item["file_id"]: item["group_id"] for item in operation.items},
+            )
             if any(old["keeper_id"] != new["keeper_id"] for old, new in zip(operation.items, fresh)):
                 raise ValueError("Keep choices changed after this preview; create a new cleanup plan")
             operation.status = "executing"

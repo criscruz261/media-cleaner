@@ -1,3 +1,5 @@
+import { GroupPreview } from "../components/GroupPreview";
+import { BatchCleanup } from "../components/BatchCleanup";
 import { VideoCompare } from "../components/VideoCompare";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -62,6 +64,7 @@ export function Review({
           potential photo/video companions stay protected.
         </p>
       </div>
+      {scanId && <BatchCleanup scanId={scanId} onPlan={onPlan} />}
       {!scanId ? (
         <Empty title="Choose a scan to review">
           <button onClick={() => navigate("Scanner")}>
@@ -108,6 +111,7 @@ export function GroupCard({
   selectForDeletion?: boolean;
   live?: boolean;
 }) {
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0),
     [destination, setDestination] = useState<"trash" | "quarantine">("trash");
   const client = useQueryClient();
@@ -163,6 +167,13 @@ export function GroupCard({
   });
   return (
     <article className="panel group-card">
+      {previewId && (
+        <GroupPreview
+          groupId={group.id}
+          initialId={previewId}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
       <div className="section-heading">
         <div>
           <h2>
@@ -265,7 +276,11 @@ export function GroupCard({
                 <Check size={14} />{" "}
                 {selectForDeletion ? "Select for deletion" : "Keep this file"}
               </label>
-              <MediaPreview file={file} thumbnailFirst={thumbnailFirst} />
+              <MediaPreview
+                file={file}
+                thumbnailFirst={thumbnailFirst}
+                onOpen={() => setPreviewId(file.id)}
+              />
               <strong className="filename">{file.name}</strong>
               <p className="file-path">{file.path}</p>
               <div className="file-meta">

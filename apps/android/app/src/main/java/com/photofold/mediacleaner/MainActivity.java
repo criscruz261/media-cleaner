@@ -322,6 +322,12 @@ public final class MainActivity extends Activity {
           active
               ? "Matches appear as soon as files are compared."
               : "No matching groups yet. Run a scan to compare accessible media.");
+    Button batch = button(groups, "Delete selected across groups", () -> preview(null));
+    batch.setEnabled(!cleanupBusy);
+    label(
+        groups,
+        "Includes selections in reviewed groups, including groups outside this page. Unreviewed"
+            + " suggestions are excluded.");
     for (Store.Group group : found) renderGroup(group);
     label(groups, "Showing " + found.size() + " of " + store.groupCount() + " groups");
     renderHistory();
@@ -441,7 +447,7 @@ public final class MainActivity extends Activity {
   private void renderMembers(LinearLayout parent, Store.Group group, int count) {
     for (Media file : group.files().subList(0, Math.min(count, group.files().size()))) {
       selection(parent, group, file);
-      thumbnail(parent, file, () -> open(file));
+      thumbnail(parent, file, () -> open(group.id(), file.uri));
       label(
           parent, file.name + " · " + String.format(Locale.ROOT, "%.1f MB", file.size / 1048576.0));
       if (!file.warning.isEmpty()) label(parent, file.warning);
@@ -449,41 +455,150 @@ public final class MainActivity extends Activity {
     }
   }
 
-  private void open(Media file) {
-    if (file.kind.equals("video")) {
-      try {
-        startActivity(
-            new Intent(Intent.ACTION_VIEW)
-                .setDataAndType(file.uri(), file.mime)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
-      } catch (ActivityNotFoundException noPlayer) {
-        message("No video player is available. Use Compare similar videos.");
-      }
-    } else {
-      Dialog dialog = new Dialog(this);
-      ScrollView scroll = new ScrollView(this);
-      LinearLayout body = column();
-      scroll.addView(body);
-      ImageView image = new ImageView(this);
-      image.setAdjustViewBounds(true);
-      body.addView(image);
-      button(body, "Close preview", dialog::dismiss);
-      dialog.setContentView(scroll);
-      dialog.show();
-      thumbnails.submit(
-          () -> {
-            try {
-              Bitmap bitmap =
-                  getContentResolver().loadThumbnail(file.uri(), new Size(1200, 1200), null);
-              runOnUiThread(
-                  () -> {
-                    if (dialog.isShowing()) image.setImageBitmap(bitmap);
-                  });
-            } catch (Exception failure) {
-              runOnUiThread(() -> message("Preview unavailable for this media."));
-            }
-          });
-    }
+  private void open(String groupId, String initialUri) {
+    Store.Group original = store.group(groupId);
+    if (original == null) return;
+    List<Media> files = original.files();
+    int[] index = {0};
+    for (int i = 0; i < files.size(); i++) if (files.get(i).uri.equals(initialUri)) index[0] = i;
+    Dialog dialog = new Dialog(this);
+    LinearLayout body = column();
+    TextView title = label(body, "");
+    LinearLayout navigation = new LinearLayout(this);
+    body.addView(navigation);
+    Button previous = button(navigation, "Previous", () -> {});
+    Button next = button(navigation, "Next", () -> {});
+    button(navigation, "Close preview", dialog::dismiss);
+    CheckBox selected = new CheckBox(this);
+    selected.setText("Select for deletion");
+    body.addView(selected);
+    LinearLayout zoomControls = new LinearLayout(this);
+    body.addView(zoomControls);
+    FrameLayout viewport = new FrameLayout(this);
+    viewport.setBackgroundColor(0xff101510);
+    body.addView(viewport, new LinearLayout.LayoutParams(-1, 0, 1));
+    ZoomImageView image = new ZoomImageView(this);
+    image.setContentDescription("Photo preview: pinch to zoom and drag to pan");
+    VideoView video = new VideoView(this);
+    viewport.addView(image, new FrameLayout.LayoutParams(-1, -1));
+    viewport.addView(video, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
+    MediaController controller = new MediaController(this);
+    controller.setAnchorView(viewport);
+    video.setMediaController(controller);
+    float[] videoZoom = {1};
+    button(
+        zoomControls,
+        "Zoom out",
+        () -> {
+          image.zoomBy(.8f);
+          videoZoom[0] = Math.max(1, videoZoom[0] / 1.25f);
+          video.setScaleX(videoZoom[0]);
+          video.setScaleY(videoZoom[0]);
+        });
+    button(
+        zoomControls,
+        "Fit to screen",
+        () -> {
+          image.fit();
+          videoZoom[0] = 1;
+          video.setScaleX(1);
+          video.setScaleY(1);
+        });
+    button(
+        zoomControls,
+        "Zoom in",
+        () -> {
+          image.zoomBy(1.25f);
+          videoZoom[0] = Math.min(5, videoZoom[0] * 1.25f);
+          video.setScaleX(videoZoom[0]);
+          video.setScaleY(videoZoom[0]);
+        });
+    Runnable render =
+        () -> {
+          Media file = files.get(index[0]);
+          Store.Group current = store.group(groupId);
+          title.setText((index[0] + 1) + " / " + files.size() + " · " + file.name);
+          previous.setEnabled(index[0] > 0);
+          next.setEnabled(index[0] + 1 < files.size());
+          selected.setChecked(current != null && !store.keep(current, file));
+          selected.setEnabled(current != null && file.protection.isEmpty() && !cleanupBusy);
+          selected.setOnClickListener(
+              view -> {
+                try {
+                  store.select(groupId, file.uri, selected.isChecked());
+                } catch (Exception failure) {
+                  selected.setChecked(!selected.isChecked());
+                  message(failure.getMessage());
+                }
+              });
+          video.stopPlayback();
+          videoZoom[0] = 1;
+          video.setScaleX(1);
+          video.setScaleY(1);
+          image.setImageDrawable(null);
+          image.fit();
+          boolean isVideo = file.kind.equals("video");
+          image.setVisibility(isVideo ? View.GONE : View.VISIBLE);
+          video.setVisibility(isVideo ? View.VISIBLE : View.GONE);
+          if (isVideo) {
+            video.setVideoURI(file.uri());
+            video.setOnPreparedListener(
+                player -> {
+                  if (dialog.isShowing()) video.seekTo(1);
+                });
+            video.setOnErrorListener(
+                (player, what, extra) -> {
+                  message("Preview unavailable for this video format.");
+                  return true;
+                });
+          } else {
+            int requestedIndex = index[0];
+            thumbnails.submit(
+                () -> {
+                  try {
+                    Bitmap bitmap =
+                        getContentResolver().loadThumbnail(file.uri(), new Size(2048, 2048), null);
+                    runOnUiThread(
+                        () -> {
+                          if (dialog.isShowing() && index[0] == requestedIndex) {
+                            image.setImageBitmap(bitmap);
+                            image.fit();
+                          }
+                        });
+                  } catch (Exception failure) {
+                    runOnUiThread(
+                        () -> {
+                          if (dialog.isShowing() && index[0] == requestedIndex)
+                            title.setText(file.name + " · Preview unavailable");
+                        });
+                  }
+                });
+          }
+        };
+    previous.setOnClickListener(
+        view -> {
+          if (index[0] > 0) {
+            index[0]--;
+            render.run();
+          }
+        });
+    next.setOnClickListener(
+        view -> {
+          if (index[0] + 1 < files.size()) {
+            index[0]++;
+            render.run();
+          }
+        });
+    dialog.setContentView(body);
+    dialog.setOnDismissListener(
+        ignored -> {
+          video.stopPlayback();
+          stamp = "";
+          refresh();
+        });
+    dialog.show();
+    dialog.getWindow().setLayout(-1, -1);
+    render.run();
   }
 
   private void compare(String groupId) {
@@ -644,42 +759,60 @@ public final class MainActivity extends Activity {
             if (ScanService.running.get())
               throw new IllegalStateException(
                   "The scanner is still stopping. Retry once it is paused.");
-            Store.Group group = store.group(groupId);
-            if (group == null)
-              throw new IllegalArgumentException(
-                  "Group changed. Resume or rescan before reviewing.");
-            List<Media> selected =
-                group.files().stream()
-                    .filter(file -> !store.keep(group, file))
-                    .collect(java.util.stream.Collectors.toList());
-            Media keeper =
-                group.files().stream()
-                    .filter(file -> store.keep(group, file))
-                    .findFirst()
-                    .orElse(null);
-            if (selected.isEmpty() || selected.size() > 100)
-              throw new IllegalArgumentException("Choose 1–100 files per cleanup.");
+            List<Store.Group> requested = new ArrayList<>();
+            if (groupId == null) {
+              for (Store.Group candidate : store.groups(Integer.MAX_VALUE))
+                if (store.reviewed(candidate)) requested.add(candidate);
+            } else {
+              Store.Group candidate = store.group(groupId);
+              if (candidate == null)
+                throw new IllegalArgumentException("Group changed. Rescan first.");
+              requested.add(candidate);
+            }
+            Set<String> selectedUris = new HashSet<>();
+            for (Store.Group group : requested)
+              for (Media file : group.files())
+                if (!store.keep(group, file)) selectedUris.add(file.uri);
+            if (selectedUris.isEmpty() || selectedUris.size() > 100)
+              throw new IllegalArgumentException("Choose 1–100 files per cleanup across groups.");
             List<Media> current = MediaRepository.discover(this, store.meta("album", ""), () -> {});
             JSONArray items = new JSONArray();
-            for (Media file : selected) {
-              if (!file.protection.isEmpty()
-                  || current.stream()
-                      .anyMatch(m -> m.uri.equals(file.uri) && !m.protection.isEmpty()))
+            Set<String> added = new HashSet<>();
+            boolean similar = false;
+            for (Store.Group group : requested) {
+              similar |= group.classification().equals("SIMILAR_CONTENT");
+              Media keeper =
+                  group.files().stream()
+                      .filter(file -> store.keep(group, file) && !selectedUris.contains(file.uri))
+                      .findFirst()
+                      .orElse(null);
+              if (keeper == null
+                  && group.files().stream().anyMatch(file -> store.keep(group, file)))
                 throw new IllegalArgumentException(
-                    "Protected media cannot be removed: " + file.name);
-              if (!MediaRepository.unchanged(this, file)
-                  || (keeper != null && !MediaRepository.unchanged(this, keeper)))
-                throw new IllegalArgumentException(
-                    "Selected or retained media changed. Rescan first.");
-              items.put(
-                  new JSONObject()
-                      .put("uri", file.uri)
-                      .put("name", file.name)
-                      .put("identity", file.identity)
-                      .put("digest", file.digest)
-                      .put("keeper", keeper == null ? "" : keeper.uri)
-                      .put("keeperIdentity", keeper == null ? "" : keeper.identity)
-                      .put("keeperDigest", keeper == null ? "" : keeper.digest));
+                    "A retained file is selected in another group. Keep it there too, or select the"
+                        + " whole group.");
+              for (Media file : group.files()) {
+                if (store.keep(group, file) || !added.add(file.uri)) continue;
+                if (!file.protection.isEmpty()
+                    || current.stream()
+                        .anyMatch(m -> m.uri.equals(file.uri) && !m.protection.isEmpty()))
+                  throw new IllegalArgumentException(
+                      "Protected media cannot be removed: " + file.name);
+                if (!MediaRepository.unchanged(this, file)
+                    || (keeper != null && !MediaRepository.unchanged(this, keeper)))
+                  throw new IllegalArgumentException(
+                      "Selected or retained media changed. Rescan first.");
+                items.put(
+                    new JSONObject()
+                        .put("uri", file.uri)
+                        .put("group", group.id())
+                        .put("name", file.name)
+                        .put("identity", file.identity)
+                        .put("digest", file.digest)
+                        .put("keeper", keeper == null ? "" : keeper.uri)
+                        .put("keeperIdentity", keeper == null ? "" : keeper.identity)
+                        .put("keeperDigest", keeper == null ? "" : keeper.digest));
+              }
             }
             JSONObject plan =
                 new JSONObject()
@@ -688,8 +821,8 @@ public final class MainActivity extends Activity {
                     .put("kind", "trash")
                     .put("status", "preview")
                     .put("resume", wasRunning)
-                    .put("group", group.id())
-                    .put("classification", group.classification())
+                    .put("group", groupId == null ? "" : groupId)
+                    .put("classification", similar ? "SIMILAR_CONTENT" : "EXACT_DUPLICATE")
                     .put("items", items);
             store.operation(plan);
             store.put("pendingOperation", plan.getString("id"));
@@ -722,18 +855,25 @@ public final class MainActivity extends Activity {
           body,
           "These files are visually similar; they may contain different moments or audio. Compare"
               + " full playback before confirming.");
-    for (int i = 0; i < items.length(); i++) label(body, items.optJSONObject(i).optString("name"));
-    String keeperUri = items.optJSONObject(0).optString("keeper");
-    Media retained = keeperUri.isEmpty() ? null : store.file(keeperUri);
+    Set<String> displayed = new HashSet<>();
+    for (int i = 0; i < items.length(); i++) {
+      JSONObject item = items.optJSONObject(i);
+      label(body, item.optString("name"));
+      String key = item.optString("group", plan.optString("group"));
+      if (displayed.add(key)) {
+        Media retained = store.file(item.optString("keeper"));
+        label(
+            body,
+            retained == null
+                ? "Keep none: every selected file in this group will move to Trash. No copy will"
+                    + " remain in this group."
+                : "Retained in this group: " + retained.name);
+      }
+    }
     label(
         body,
-        retained == null
-            ? "Keep none: every selected file will move to Trash. No copy will remain in this"
-                  + " group."
-            : "Retained: "
-                + retained.name
-                + ". Selected and retained files will be freshly hashed before Android"
-                + " confirmation.");
+        "Selected files and any retained copies will be freshly hashed before Android"
+            + " confirmation.");
     CheckBox confirmed = new CheckBox(this);
     confirmed.setText("I reviewed these files and want to move them to Trash");
     body.addView(confirmed);
@@ -741,7 +881,10 @@ public final class MainActivity extends Activity {
     review.addView(body);
     AlertDialog dialog =
         new AlertDialog.Builder(this)
-            .setTitle("Confirm group cleanup")
+            .setTitle(
+                plan.optString("group").isEmpty()
+                    ? "Confirm cleanup across groups"
+                    : "Confirm group cleanup")
             .setView(review)
             .setPositiveButton(
                 "Continue to Android confirmation", (d, which) -> validateAndTrash(plan))
@@ -793,7 +936,7 @@ public final class MainActivity extends Activity {
                       .anyMatch(
                           file -> file.uri.equals(selected.uri) && !file.protection.isEmpty()))
                 throw new IllegalArgumentException("A selected file is protected. Rescan first.");
-              Store.Group group = store.group(plan.getString("group"));
+              Store.Group group = store.group(item.optString("group", plan.optString("group")));
               if (group == null
                   || group.files().stream().noneMatch(file -> file.uri.equals(selected.uri))
                   || store.keep(group, selected)

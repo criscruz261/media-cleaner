@@ -937,3 +937,117 @@ footer span:last-child {
 .video-compare-modal .media-grid {
   margin-top: 20px;
 }
+
+/* Group preview uses the viewport remaining after its wrapping toolbar. */
+.group-preview-backdrop {
+  padding: 12px;
+}
+.group-preview {
+  width: 100%;
+  height: 100%;
+  max-width: 1800px;
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+.group-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.group-preview-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 8px 0;
+  flex-shrink: 0;
+}
+.group-preview-media {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #101510;
+  overscroll-behavior: contain;
+}
+.group-preview-canvas {
+  min-width: 100%;
+  min-height: 100%;
+}
+.group-preview-canvas img,
+.group-preview-canvas video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  max-width: none;
+  max-height: none;
+}
+.sidebar-toggle {
+  align-self: flex-end;
+  margin-bottom: 12px;
+}
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 5;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible {
+  background: var(--green);
+}
+@media (min-width: 651px) {
+  .app-shell .sidebar {
+    width: var(--sidebar-width, 244px);
+  }
+  .app-shell .workspace {
+    margin-left: var(--sidebar-width, 244px);
+    min-width: 0;
+  }
+  .sidebar-collapsed .sidebar {
+    padding: 18px 10px;
+  }
+  .sidebar-collapsed .brand > span:not(.brand-icon),
+  .sidebar-collapsed .nav-text,
+  .sidebar-collapsed .nav-label,
+  .sidebar-collapsed .sidebar-note,
+  .sidebar-collapsed .sidebar-footer,
+  .sidebar-collapsed .sidebar-resizer {
+    display: none;
+  }
+  .sidebar-collapsed nav button {
+    justify-content: center;
+    padding: 12px;
+    font-size: 0;
+  }
+}
+@media (max-width: 650px) {
+  .sidebar-resizer {
+    display: none;
+  }
+  .sidebar-collapsed .sidebar nav,
+  .sidebar-collapsed .sidebar .brand {
+    display: none;
+  }
+  .sidebar-toggle {
+    float: right;
+    margin: 0;
+  }
+  .group-preview-toolbar {
+    gap: 4px;
+  }
+  .group-preview-toolbar button {
+    padding: 8px;
+  }
+}

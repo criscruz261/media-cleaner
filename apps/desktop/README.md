@@ -12,3 +12,5 @@ The existing Media Cleaner application for macOS, with Windows and Linux develop
 From the repository root use `./run.sh`, `./scripts/setup.sh`, and `./scripts/check.sh`. On Windows use `./scripts/setup.ps1` and `./scripts/run.ps1`. These compatibility entry points delegate into this directory. Local Python environments and downloaded toolchains stay at the repository root.
 
 Keep common desktop behavior in the backend/frontend. Put OS-specific additions under the corresponding platform directory instead of copying the application. OS adapters already supplied by Python libraries remain dependencies of the desktop backend.
+
+Open a thumbnail or **Open group preview** to browse the entire group, including files on other result pages. Use **Previous/Next** (or arrow keys), zoom controls, **Fit to screen**, and **Select for deletion** without closing the preview. Escape closes it. The preview fits the current window; zoomed photos can be dragged to pan. Drag the sidebar’s right edge to resize it, or use its collapse/expand button. Width and collapsed state persist locally; the resize handle also supports arrow keys, Home and End.
