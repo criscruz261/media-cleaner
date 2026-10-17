@@ -1,3 +1,4 @@
+import { useCompactGroups } from "../components/CompactGroupsContext";
 import { useCleanupDestination } from "../components/CleanupDestinationContext";
 import { groupPage } from "../services/groupPages";
 import { GroupFilters, useGroupFilter } from "../components/GroupFilters";
@@ -141,6 +142,7 @@ export function GroupCard({
   selectForDeletion?: boolean;
   live?: boolean;
 }) {
+  const [compact] = useCompactGroups();
   const openPreview = useContext(PreviewContext);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
@@ -195,7 +197,10 @@ export function GroupCard({
     onSuccess: onPlan,
   });
   return (
-    <article className="panel group-card">
+    <article
+      className={`panel group-card${compact > 1 ? " group-card-compact" : ""}`}
+      data-compact-level={compact}
+    >
       {previewId && (
         <GroupPreview
           groupId={group.id}
@@ -319,7 +324,9 @@ export function GroupCard({
               />
               <div className="media-details">
                 <strong className="filename">{file.name}</strong>
-                <p className="file-path">{file.path}</p>
+                <p className="file-path" title={file.path}>
+                  {file.path}
+                </p>
                 <div className="file-meta">
                   <span>{bytes(file.size)}</span>
                   {!!file.metadata.width && (

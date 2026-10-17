@@ -1,3 +1,5 @@
+import { CompactGroupsProvider } from "./CompactGroupsContext";
+import { GroupFilters } from "./GroupFilters";
 import { useState } from "react";
 import { it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -141,7 +143,14 @@ it("uses deletion selections by default and saves them without a review button",
   try {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <GroupCard group={group} onPlan={vi.fn()} />
+        <CompactGroupsProvider>
+          <GroupFilters
+            classification=""
+            sort="discovered"
+            onChange={vi.fn()}
+          />
+          <GroupCard group={group} onPlan={vi.fn()} />
+        </CompactGroupsProvider>
       </QueryClientProvider>,
     );
     const boxes = await screen.findAllByRole("checkbox", {
@@ -149,6 +158,20 @@ it("uses deletion selections by default and saves them without a review button",
     });
     expect(boxes[0]).not.toBeChecked();
     expect(boxes[1]).toBeChecked();
+    const toggle = screen.getByRole("combobox", { name: "Compact level" });
+    fireEvent.change(toggle, { target: { value: "5" } });
+    expect(boxes[0].closest(".group-card")).toHaveAttribute(
+      "data-compact-level",
+      "5",
+    );
+    expect(boxes[0].closest(".group-card")).toHaveClass("group-card-compact");
+    expect(localStorage.getItem("media-cleaner.compact-level")).toBe("5");
+    expect(boxes[1]).toBeChecked();
+    fireEvent.change(toggle, { target: { value: "1" } });
+    expect(boxes[0].closest(".group-card")).not.toHaveClass(
+      "group-card-compact",
+    );
+
     expect(
       screen.queryByRole("button", {
         name: "Mark selections reviewed for batch deletion",
@@ -162,5 +185,7 @@ it("uses deletion selections by default and saves them without a review button",
     });
   } finally {
     vi.unstubAllGlobals();
+    localStorage.removeItem("media-cleaner.compact-groups");
+    localStorage.removeItem("media-cleaner.compact-level");
   }
 });
