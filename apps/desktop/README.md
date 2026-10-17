@@ -9,7 +9,7 @@ The existing Media Cleaner application for macOS, with Windows and Linux develop
 - `platforms/macos/`, `platforms/linux/`: platform-specific integration and release notes.
 - `packaging/`: planned desktop packaging; no installer is implemented yet.
 
-From the repository root use `./run.sh`, `./scripts/setup.sh`, and `./scripts/check.sh`. On Windows use `./scripts/setup.ps1` and `./scripts/run.ps1`. These compatibility entry points delegate into this directory. Local Python environments and downloaded toolchains stay at the repository root.
+From the repository root use `./run.sh`, `./scripts/setup.sh`, and `./scripts/check.sh`. On Windows use `./scripts/windows/1-setup.ps1` and `./scripts/windows/2-run.ps1`. These compatibility entry points delegate into this directory. Local Python environments and downloaded toolchains stay at the repository root.
 
 Keep common desktop behavior in the backend/frontend. Put OS-specific additions under the corresponding platform directory instead of copying the application. OS adapters already supplied by Python libraries remain dependencies of the desktop backend.
 

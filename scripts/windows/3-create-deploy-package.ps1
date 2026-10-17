@@ -1,14 +1,14 @@
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
-$ProjectRoot = Split-Path $PSScriptRoot -Parent
+$ProjectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Set-Location $ProjectRoot
 if ($env:OS -ne 'Windows_NT') { throw 'Build the Windows package on Windows.' }
 $Python = Join-Path $ProjectRoot '.venv-phase1\Scripts\python.exe'
-if (!(Test-Path -LiteralPath $Python)) { throw 'Run .\scripts\setup.ps1 first.' }
+if (!(Test-Path -LiteralPath $Python)) { throw 'Run .\scripts\windows\1-setup.ps1 first.' }
 
 # Setup also finds/installs Node.js and rebuilds the frontend from the lockfile.
-& "$PSScriptRoot\setup.ps1"
+& "$PSScriptRoot\1-setup.ps1"
 if ($LASTEXITCODE -ne 0) { throw 'Desktop setup failed.' }
 & $Python -m pip install 'pyinstaller==6.22.3'
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller installation failed.' }

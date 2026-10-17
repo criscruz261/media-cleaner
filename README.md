@@ -45,8 +45,8 @@ Windows PowerShell:
 
 ```powershell
 # Optionally set $env:PYTHON_BIN to your Python 3.12+ executable
-./scripts/setup.ps1
-./scripts/run.ps1
+./scripts/windows/1-setup.ps1
+./scripts/windows/2-run.ps1
 ```
 
 Windows setup detects Python 3.12+ and Node 22.12+ and installs missing prerequisites using `winget` (Microsoft App Installer). Installer prompts may request elevation. If winget cannot provide a usable Node.js installation, setup downloads the official Node.js 22 Windows ZIP, verifies its SHA-256 checksum, and keeps it in ignored `.tools/node` without administrator access. Setup reuses this runtime on later runs. It refreshes PATH for the current session before creating the environment and building the app. If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that terminal first. An explicit `PYTHON_BIN` must point to a working Python 3.12+ executable.

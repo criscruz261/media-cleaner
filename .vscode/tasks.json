@@ -6,7 +6,7 @@
       "type": "shell",
       "command": "./run.sh",
       "windows": {
-        "command": "powershell -ExecutionPolicy Bypass -File scripts/run.ps1"
+        "command": "powershell -ExecutionPolicy Bypass -File scripts/windows/2-run.ps1"
       },
       "problemMatcher": []
     },

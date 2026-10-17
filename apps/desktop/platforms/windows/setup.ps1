@@ -154,8 +154,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Backend installation failed' }
 & .\.venv-phase1\Scripts\python.exe apps/desktop/scripts/install-media-tools.py
 if ($LASTEXITCODE -ne 0) { throw 'Media tool installation failed' }
-& $Npm ci --prefix apps/desktop/frontend
+# Launch npm through the selected Node executable and normalize the environment
+# inherited by lifecycle scripts (including esbuild's `node install.js`).
+$NpmRunner = Join-Path $PSScriptRoot 'run-npm.cjs'
+& $Node $NpmRunner ci --prefix apps/desktop/frontend
 if ($LASTEXITCODE -ne 0) { throw 'Frontend installation failed' }
-& $Npm run build --prefix apps/desktop/frontend
+& $Node $NpmRunner run build --prefix apps/desktop/frontend
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
-Write-Host 'Setup complete. Run ./scripts/run.ps1'
+Write-Host 'Setup complete. Run ./scripts/windows/2-run.ps1'
