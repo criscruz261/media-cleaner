@@ -1,3 +1,4 @@
+import { ScanWorkflow } from "../components/ScanWorkflow";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -98,21 +99,22 @@ export function Scanner({
   });
   const active = ["queued", "running"].includes(scan.data?.status ?? "");
   return (
-    <>
+    <div className="scanner-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">SCAN YOUR WAY</div>
-          <h1>Start with a folder.</h1>
-          <p>Internal storage, external drives, or mounted network folders.</p>
+          <h1>Scanner</h1>
+          <p>Choose folders, scan media, then review matches before cleanup.</p>
         </div>
       </div>
-      <section className="panel">
-        <div className="section-heading">
-          <h2>
-            <FolderOpen size={20} /> Scan locations
-          </h2>
-          <span className="badge">Read-only analysis</span>
-        </div>
+      <ScanWorkflow scan={scan.data} />
+      <details className="panel scanner-setup" open={!scanId}>
+        <summary>
+          <FolderOpen size={18} /> Scan setup{" "}
+          <span className="hint">
+            {roots.split("\n").filter((line) => line.trim()).length} folders ·{" "}
+            {mode === "similar" ? "Similar media" : "Exact matches"}
+          </span>
+        </summary>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -134,7 +136,7 @@ export function Scanner({
           <textarea
             id="roots"
             required
-            rows={3}
+            rows={2}
             placeholder={"/Volumes/Photos/2025 - Bangkok\n/Users/you/Pictures"}
             value={roots}
             onChange={(e) => setRoots(e.target.value)}
@@ -159,6 +161,35 @@ export function Scanner({
                 <option value="videos">Videos · exact duplicates</option>
               </select>
             </div>
+            {mode === "similar" && (
+              <div>
+                <label htmlFor="sensitivity">
+                  Media similarity sensitivity
+                </label>
+                <select
+                  id="sensitivity"
+                  value={sensitivity}
+                  onChange={(event) => setSensitivity(event.target.value)}
+                >
+                  <option value="strict">Strict · fewer, closer matches</option>
+                  <option value="balanced">
+                    Balanced · re-encoded and lightly edited media
+                  </option>
+                  <option value="broad">
+                    Broad · more candidates to review
+                  </option>
+                </select>
+              </div>
+            )}
+          </div>
+          <details className="scanner-advanced">
+            <summary>Advanced options · exclusions & hidden files</summary>
+            <p className="hint">
+              Photo pHash + dHash and time-spaced video/animation frame
+              comparisons. Videos may have different audio. Crops, trims and
+              partial clips can be missed. Unsupported decoders are reported
+              below the scan.
+            </p>
             <div>
               <label htmlFor="extensions">Exclude extensions</label>
               <input
@@ -168,46 +199,24 @@ export function Scanner({
                 onChange={(e) => setExtensions(e.target.value)}
               />
             </div>
-          </div>
-          {mode === "similar" && (
-            <div>
-              <label htmlFor="sensitivity">Media similarity sensitivity</label>
-              <select
-                id="sensitivity"
-                value={sensitivity}
-                onChange={(event) => setSensitivity(event.target.value)}
-              >
-                <option value="strict">Strict · fewer, closer matches</option>
-                <option value="balanced">
-                  Balanced · re-encoded and lightly edited media
-                </option>
-                <option value="broad">Broad · more candidates to review</option>
-              </select>
-              <p className="hint">
-                Photo pHash + dHash and time-spaced video/animation frame
-                comparisons. Videos may have different audio. Crops, trims and
-                partial clips can be missed. Unsupported decoders are reported
-                below the scan.
-              </p>
-            </div>
-          )}
-          <label htmlFor="excluded">
-            Excluded folders · one absolute path per line
-          </label>
-          <textarea
-            id="excluded"
-            rows={2}
-            value={excluded}
-            onChange={(e) => setExcluded(e.target.value)}
-          />
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={hidden}
-              onChange={(e) => setHidden(e.target.checked)}
-            />{" "}
-            Include hidden files and folders
-          </label>
+            <label htmlFor="excluded">
+              Excluded folders · one absolute path per line
+            </label>
+            <textarea
+              id="excluded"
+              rows={2}
+              value={excluded}
+              onChange={(e) => setExcluded(e.target.value)}
+            />
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={hidden}
+                onChange={(e) => setHidden(e.target.checked)}
+              />{" "}
+              Include hidden files and folders
+            </label>
+          </details>
           <div className="form-footer">
             <p className="muted">
               All analysis stays local. Similar-media results require manual
@@ -219,7 +228,7 @@ export function Scanner({
           </div>
           <ErrorMessage error={start.error} />
         </form>
-      </section>
+      </details>
       {scan.data && (
         <>
           <section className="panel">
@@ -272,8 +281,14 @@ export function Scanner({
               <span>{scan.data.cache_hits} cached</span>
               <span>{scan.data.errors} errors</span>
             </div>
-            <div className="notice">
-              <ShieldCheck size={18} />
+            <details className="scanner-recovery">
+              <summary>
+                <ShieldCheck size={14} /> Auto-saved
+                {scan.data.checkpoint_at
+                  ? ` · ${new Date(scan.data.checkpoint_at).toLocaleTimeString()}`
+                  : ""}{" "}
+                · checkpoint & recovery details
+              </summary>
               <p>
                 Saved automatically after each file
                 {scan.data.checkpoint_at
@@ -284,42 +299,51 @@ export function Scanner({
                 this page does not stop the scan. After a backend restart,
                 choose Resume; an unfinished file starts again safely.
               </p>
-            </div>
+            </details>
             {!!scan.data.activity?.length && (
-              <div className="scan-activity" aria-label="Current scan activity">
-                {scan.data.activity.map((item) => (
-                  <div key={item.path}>
-                    <p className="file-path">
-                      <strong>{item.phase}</strong> · {item.path}
-                    </p>
-                    {item.phase === "hashing" ? (
-                      <>
-                        <progress
-                          aria-label={`Reading ${item.path}`}
-                          max={Math.max(item.size, 1)}
-                          value={item.bytes_done}
-                        />
-                        <small>
-                          {bytes(item.bytes_done)} / {bytes(item.size)}
-                        </small>
-                      </>
-                    ) : item.frames_total ? (
-                      <>
-                        <progress
-                          aria-label={`Comparing ${item.path}`}
-                          max={item.frames_total}
-                          value={item.frames_done}
-                        />
-                        <small>
-                          {item.frames_done} / {item.frames_total} samples
-                        </small>
-                      </>
-                    ) : (
-                      <progress aria-label={`Processing ${item.path}`} />
-                    )}
-                  </div>
-                ))}
-              </div>
+              <details className="scanner-activity">
+                <summary>
+                  File activity · {scan.data.activity.length} ongoing ·{" "}
+                  {scan.data.activity[0].phase}
+                </summary>
+                <div
+                  className="scan-activity"
+                  aria-label="Current scan activity"
+                >
+                  {scan.data.activity.map((item) => (
+                    <div key={item.path}>
+                      <p className="file-path">
+                        <strong>{item.phase}</strong> · {item.path}
+                      </p>
+                      {item.phase === "hashing" ? (
+                        <>
+                          <progress
+                            aria-label={`Reading ${item.path}`}
+                            max={Math.max(item.size, 1)}
+                            value={item.bytes_done}
+                          />
+                          <small>
+                            {bytes(item.bytes_done)} / {bytes(item.size)}
+                          </small>
+                        </>
+                      ) : item.frames_total ? (
+                        <>
+                          <progress
+                            aria-label={`Comparing ${item.path}`}
+                            max={item.frames_total}
+                            value={item.frames_done}
+                          />
+                          <small>
+                            {item.frames_done} / {item.frames_total} samples
+                          </small>
+                        </>
+                      ) : (
+                        <progress aria-label={`Processing ${item.path}`} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
             <div className="actions">
               {active ? (
@@ -353,7 +377,7 @@ export function Scanner({
                 </>
               ) : null}
               <button
-                disabled={scan.data.status !== "completed"}
+                disabled={!scan.data.discovered}
                 onClick={() => navigate("Review")}
               >
                 Review matches <ArrowRight size={15} />
@@ -394,6 +418,6 @@ export function Scanner({
           />
         </>
       )}
-    </>
+    </div>
   );
 }

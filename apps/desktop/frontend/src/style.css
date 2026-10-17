@@ -1243,3 +1243,149 @@ footer span:last-child {
 .selection-summary small {
   font-weight: 400;
 }
+
+.scanner-page .page-heading {
+  margin-bottom: 12px;
+}
+.scanner-page .page-heading h1 {
+  font-size: 26px;
+}
+.scanner-page .page-heading p {
+  margin: 4px 0;
+}
+.scanner-page > .panel,
+.scanner-page > details.panel {
+  padding: 16px;
+  margin: 12px 0;
+}
+.scanner-page .form-footer {
+  margin-top: 12px;
+}
+.scanner-page .form-footer p {
+  font-size: 12px;
+}
+.scanner-page .form-grid {
+  margin: 8px 0;
+}
+.scanner-page .progress-stats {
+  gap: 8px 16px;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.scanner-setup > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.scanner-setup > summary::before {
+  content: "▸";
+}
+.scanner-setup[open] > summary::before {
+  content: "▾";
+}
+.scanner-setup[open] > summary {
+  margin-bottom: 14px;
+}
+.scanner-setup > summary .hint {
+  margin: 0;
+  font-weight: 400;
+}
+.scanner-advanced,
+.scanner-recovery,
+.scanner-activity {
+  margin: 10px 0;
+  font-size: 12px;
+}
+.scanner-advanced > summary,
+.scanner-recovery > summary,
+.scanner-activity > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.scanner-recovery summary svg {
+  display: inline;
+  vertical-align: middle;
+}
+.scan-workflow {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+.scan-workflow ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.scan-workflow li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.scan-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.scan-workflow li small {
+  display: block;
+  font-size: 10px;
+  margin-top: 3px;
+  font-weight: 400;
+}
+.scan-workflow .current {
+  color: var(--ink);
+  font-weight: 700;
+}
+.scan-workflow .current .scan-step-number {
+  background: #325f43;
+  color: white;
+  border-color: #325f43;
+}
+.scan-workflow .done .scan-step-number {
+  color: #325f43;
+  background: #e9f6ec;
+}
+.scan-workflow-status {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 10px;
+  font-size: 12px;
+}
+.scan-workflow-status p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 800px) {
+  .scan-workflow ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 500px) {
+  .scan-workflow ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .scan-workflow-status {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .scanner-setup > summary {
+    flex-wrap: wrap;
+  }
+}
