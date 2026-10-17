@@ -204,77 +204,76 @@ export function GroupCard({
           onClose={() => setPreviewId(null)}
         />
       )}
-      <div className="section-heading">
-        <div>
-          <h2>
-            <Layers3 size={18} /> {group.member_count}{" "}
-            {group.classification === "EXACT_DUPLICATE"
-              ? "exact copies"
-              : group.evidence.media_kind === "sequence"
-                ? "similar videos / animations"
-                : "similar photos"}
-          </h2>
-          <span className="badge exact">
-            {group.classification === "EXACT_DUPLICATE"
-              ? "Exact duplicate"
-              : "Similar media · review required"}
-          </span>
+      <div className="group-summary">
+        <div className="section-heading">
+          <div>
+            <h2>
+              <Layers3 size={18} /> {group.member_count}{" "}
+              {group.classification === "EXACT_DUPLICATE"
+                ? "exact copies"
+                : group.evidence.media_kind === "sequence"
+                  ? "similar videos / animations"
+                  : "similar photos"}
+            </h2>
+            <span className="badge exact">
+              {group.classification === "EXACT_DUPLICATE"
+                ? "Exact duplicate"
+                : "Similar media · review required"}
+            </span>
+          </div>
+          <strong>{bytes(group.recoverable)} potential</strong>
         </div>
-        <strong>{bytes(group.recoverable)} potential</strong>
+        <p className="hint group-identifier">Group {group.id}</p>
+        <p className="recommendation">{group.recommendation}</p>
+        <details className="evidence">
+          <summary>
+            Matching evidence ·{" "}
+            {group.classification === "EXACT_DUPLICATE"
+              ? "SHA-256"
+              : group.evidence.media_kind === "sequence"
+                ? "time-spaced frames"
+                : "pHash + dHash"}
+          </summary>
+          {group.classification === "EXACT_DUPLICATE" ? (
+            <>
+              <code>{group.evidence.sha256}</code>
+              <p>
+                Same file size and complete SHA-256 digest. Algorithm:{" "}
+                {group.evidence.algorithm}.
+              </p>
+            </>
+          ) : group.evidence.media_kind === "sequence" ? (
+            <>
+              <p>
+                At least {group.evidence.minimum_matched_samples} of{" "}
+                {group.evidence.sample_count} time-spaced visual samples match
+                for each pair. Maximum duration difference:{" "}
+                {group.evidence.max_duration_difference_seconds?.toFixed(3)}{" "}
+                seconds.
+              </p>
+              <p>
+                Frame pHash limit: {group.evidence.phash_limit}/64; dHash limit:{" "}
+                {group.evidence.dhash_limit}/64. Every group pair qualifies.{" "}
+                {group.evidence.note}
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                Maximum pairwise pHash distance:{" "}
+                {group.evidence.max_phash_distance}/64 (limit{" "}
+                {group.evidence.phash_limit}). Maximum dHash distance:{" "}
+                {group.evidence.max_dhash_distance}/64 (limit{" "}
+                {group.evidence.dhash_limit}).
+              </p>
+              <p>
+                Every member passes both thresholds against every other member,
+                with aspect and color checks. {group.evidence.note}
+              </p>
+            </>
+          )}
+        </details>
       </div>
-      {detail.data?.files.some((file) => file.media_type === "video") && (
-        <VideoCompare groupId={group.id} scanId={group.scan_id} />
-      )}
-      <p className="hint group-identifier">Group {group.id}</p>
-      <p className="recommendation">{group.recommendation}</p>
-      <details className="evidence">
-        <summary>
-          Matching evidence ·{" "}
-          {group.classification === "EXACT_DUPLICATE"
-            ? "SHA-256"
-            : group.evidence.media_kind === "sequence"
-              ? "time-spaced frames"
-              : "pHash + dHash"}
-        </summary>
-        {group.classification === "EXACT_DUPLICATE" ? (
-          <>
-            <code>{group.evidence.sha256}</code>
-            <p>
-              Same file size and complete SHA-256 digest. Algorithm:{" "}
-              {group.evidence.algorithm}.
-            </p>
-          </>
-        ) : group.evidence.media_kind === "sequence" ? (
-          <>
-            <p>
-              At least {group.evidence.minimum_matched_samples} of{" "}
-              {group.evidence.sample_count} time-spaced visual samples match for
-              each pair. Maximum duration difference:{" "}
-              {group.evidence.max_duration_difference_seconds?.toFixed(3)}{" "}
-              seconds.
-            </p>
-            <p>
-              Frame pHash limit: {group.evidence.phash_limit}/64; dHash limit:{" "}
-              {group.evidence.dhash_limit}/64. Every group pair qualifies.{" "}
-              {group.evidence.note}
-            </p>
-          </>
-        ) : (
-          <>
-            <p>
-              Maximum pairwise pHash distance:{" "}
-              {group.evidence.max_phash_distance}/64 (limit{" "}
-              {group.evidence.phash_limit}). Maximum dHash distance:{" "}
-              {group.evidence.max_dhash_distance}/64 (limit{" "}
-              {group.evidence.dhash_limit}).
-            </p>
-            <p>
-              Every member passes both thresholds against every other member,
-              with aspect and color checks. {group.evidence.note}
-            </p>
-          </>
-        )}
-      </details>
       {detail.isPending ? (
         <Loading />
       ) : (
@@ -316,34 +315,36 @@ export function GroupCard({
                     : setPreviewId(file.id)
                 }
               />
-              <strong className="filename">{file.name}</strong>
-              <p className="file-path">{file.path}</p>
-              <div className="file-meta">
-                <span>{bytes(file.size)}</span>
-                {!!file.metadata.width && (
-                  <span>
-                    {String(file.metadata.width)} ×{" "}
-                    {String(file.metadata.height)}
-                  </span>
+              <div className="media-details">
+                <strong className="filename">{file.name}</strong>
+                <p className="file-path">{file.path}</p>
+                <div className="file-meta">
+                  <span>{bytes(file.size)}</span>
+                  {!!file.metadata.width && (
+                    <span>
+                      {String(file.metadata.width)} ×{" "}
+                      {String(file.metadata.height)}
+                    </span>
+                  )}
+                  {file.id === group.recommended_id && (
+                    <span>Suggested keeper</span>
+                  )}
+                </div>
+                {file.protected_reason && (
+                  <p className="protected">
+                    <ShieldCheck size={12} />
+                    {file.protected_reason}
+                  </p>
                 )}
-                {file.id === group.recommended_id && (
-                  <span>Suggested keeper</span>
+                {file.status !== "ready" && (
+                  <p className="muted">{displayLabel(file.status)}</p>
                 )}
+                {file.warnings.map((warning) => (
+                  <p className="hint" key={warning}>
+                    {warning}
+                  </p>
+                ))}
               </div>
-              {file.protected_reason && (
-                <p className="protected">
-                  <ShieldCheck size={12} />
-                  {file.protected_reason}
-                </p>
-              )}
-              {file.status !== "ready" && (
-                <p className="muted">{displayLabel(file.status)}</p>
-              )}
-              {file.warnings.map((warning) => (
-                <p className="hint" key={warning}>
-                  {warning}
-                </p>
-              ))}
             </div>
           ))}
         </div>
@@ -354,50 +355,59 @@ export function GroupCard({
         size={50}
         onChange={setOffset}
       />
-      <p className="hint">
-        {selectForDeletion
-          ? "Select the unwanted files, then click Delete selected for this group. Unselected files are kept."
-          : "Check the files to keep. Uncheck unwanted files, then preview deletion for this group."}{" "}
-        The preview includes selected files across all pages of this group. You
-        must confirm before anything is moved.
-      </p>
-      {detail.data?.review_status === "reviewed" && (
-        <p role="status">
-          Selections saved · included in batch cleanup when this group matches
-          the filter.
-        </p>
-      )}
-      <div className="group-actions">
-        <button
-          disabled={
-            !detail.data ||
-            selectAll.isPending ||
-            review.isPending ||
-            plan.isPending
-          }
-          onClick={() => selectAll.mutate()}
-        >
-          Select all for deletion (keep none)
-        </button>
-        {group.classification === "EXACT_DUPLICATE" && (
+      <div className="group-actionbar">
+        <div className="group-actions-heading">
+          <strong>Available actions</strong>
+          {detail.data?.review_status === "reviewed" && (
+            <span className="group-review-state">Selections saved</span>
+          )}
+        </div>
+        <div className="group-actions">
+          {detail.data?.files.some((file) => file.media_type === "video") && (
+            <VideoCompare groupId={group.id} scanId={group.scan_id} />
+          )}
+          <button
+            disabled={
+              !detail.data ||
+              selectAll.isPending ||
+              review.isPending ||
+              plan.isPending
+            }
+            onClick={() => selectAll.mutate()}
+          >
+            Select all for deletion (keep none)
+          </button>
+          <button
+            className="primary"
+            disabled={
+              !selectedCount ||
+              plan.isPending ||
+              review.isPending ||
+              selectAll.isPending
+            }
+            onClick={() => plan.mutate()}
+          >
+            {selectForDeletion ? "Delete selected" : "Delete unchecked"} ·{" "}
+            {selectedCount} in this group <ArrowRight size={15} />
+          </button>
+        </div>
+        <details className="group-selection-help">
+          <summary>Selection rules & cleanup details</summary>
           <p className="hint">
-            Keep at least one file, or explicitly choose Select all for deletion
-            to keep none. To change the keeper, keep another copy first.
+            {selectForDeletion
+              ? "Select the unwanted files, then click Delete selected for this group. Unselected files are kept."
+              : "Check the files to keep. Uncheck unwanted files, then preview deletion for this group."}{" "}
+            The preview includes selected files across all pages of this group.
+            You must confirm before anything is moved.
           </p>
-        )}
-        <button
-          className="primary"
-          disabled={
-            !selectedCount ||
-            plan.isPending ||
-            review.isPending ||
-            selectAll.isPending
-          }
-          onClick={() => plan.mutate()}
-        >
-          {selectForDeletion ? "Delete selected" : "Delete unchecked"} ·{" "}
-          {selectedCount} in this group <ArrowRight size={15} />
-        </button>
+          {group.classification === "EXACT_DUPLICATE" && (
+            <p className="hint">
+              Keep at least one file, or explicitly choose Select all for
+              deletion to keep none. To change the keeper, keep another copy
+              first.
+            </p>
+          )}
+        </details>
       </div>
       <ErrorMessage
         error={detail.error || review.error || selectAll.error || plan.error}
