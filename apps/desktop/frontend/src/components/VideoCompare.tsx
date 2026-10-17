@@ -70,6 +70,7 @@ function Comparison({
     mutationFn: ({ id, selected }: { id: string; selected: boolean }) =>
       api(`/groups/${groupId}/review`, { changes: { [id]: !selected } }),
     onSuccess: (_, { id, selected }) => {
+      void client.invalidateQueries({ queryKey: ["selection-summary"] });
       client.setQueryData<MediaFile[]>(["compare-videos", groupId], (current) =>
         current?.map((file) =>
           file.id === id ? { ...file, keep: !selected } : file,

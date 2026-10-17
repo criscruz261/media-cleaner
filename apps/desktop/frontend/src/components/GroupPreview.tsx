@@ -51,7 +51,10 @@ export function GroupPreview({
   const review = useMutation({
     mutationFn: ({ id, keep }: { id: string; keep: boolean }) =>
       api(`/groups/${groupId}/review`, { changes: { [id]: keep } }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["group", groupId] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["selection-summary"] });
+      return client.invalidateQueries({ queryKey: ["group", groupId] });
+    },
     onSettled: () => setPendingChoice(null),
   });
   const move = (direction: number) => {

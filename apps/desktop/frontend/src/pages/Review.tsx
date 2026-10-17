@@ -1,5 +1,5 @@
 import { groupPage } from "../services/groupPages";
-import { GroupFilters, type GroupFilter } from "../components/GroupFilters";
+import { GroupFilters, useGroupFilter } from "../components/GroupFilters";
 import { GroupPreview, PreviewContext } from "../components/GroupPreview";
 import { BatchCleanup } from "../components/BatchCleanup";
 import { VideoCompare } from "../components/VideoCompare";
@@ -23,7 +23,7 @@ export function Review({
 }) {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [classification, setClassification] = useState<GroupFilter>("");
+  const [classification, setClassification] = useGroupFilter();
   const [sort, setSort] = useState("discovered");
   const scans = useQuery({
     queryKey: ["scans"],
@@ -162,13 +162,17 @@ export function GroupCard({
   const review = useMutation({
     mutationFn: ({ id, keep }: { id: string; keep: boolean }) =>
       api(`/groups/${group.id}/review`, { changes: { [id]: keep } }),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["group", group.id] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["selection-summary"] });
+      return client.invalidateQueries({ queryKey: ["group", group.id] });
+    },
   });
   const selectAll = useMutation({
     mutationFn: () => api(`/groups/${group.id}/review`, { keep_ids: [] }),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["group", group.id] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["selection-summary"] });
+      return client.invalidateQueries({ queryKey: ["group", group.id] });
+    },
   });
   const eligible =
     detail.data?.files.filter(

@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { GroupFilterContext } from "./GroupFilters";
 import { ErrorMessage } from "./ui";
 import {
   useQuery,
@@ -10,6 +12,16 @@ import type { Scan } from "../types/api";
 
 export function ScanProgress({ scanId }: { scanId: string }) {
   const client = useQueryClient();
+  const classification = useContext(GroupFilterContext)?.[0] ?? "";
+  const selection = useQuery({
+    queryKey: ["selection-summary", scanId, classification],
+    queryFn: () =>
+      api<{ selected_files: number; total_files: number }>(
+        `/scans/${scanId}/selection-summary${classification ? `?classification=${classification}` : ""}`,
+      ),
+    enabled: !!scanId,
+    refetchInterval: 1000,
+  });
   const busy = useIsMutating() > 0;
   const control = useMutation({
     mutationFn: (action: string) => api(`/scans/${scanId}/${action}`, {}),
@@ -40,6 +52,21 @@ export function ScanProgress({ scanId }: { scanId: string }) {
             max={Math.max(1, value.discovered)}
             value={value.stage === "discovery" ? undefined : value.processed}
           />
+          <strong className="selection-summary">
+            {selection.data
+              ? `${selection.data.selected_files} / ${selection.data.total_files} files selected for deletion`
+              : selection.isError
+                ? "Deletion selection count unavailable"
+                : "Loading deletion selection count…"}
+            <small>
+              {classification === "EXACT_DUPLICATE"
+                ? "Exact duplicates only"
+                : classification === "SIMILAR_CONTENT"
+                  ? "Similar media only"
+                  : "All matching groups"}{" "}
+              · all pages
+            </small>
+          </strong>
           {active && (
             <button
               disabled={busy}

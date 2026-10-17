@@ -1,5 +1,5 @@
 import { groupPage } from "../services/groupPages";
-import { GroupFilters, type GroupFilter } from "./GroupFilters";
+import { GroupFilters, useGroupFilter } from "./GroupFilters";
 import { BatchCleanup } from "./BatchCleanup";
 import { GroupCard } from "../pages/Review";
 import type { Cleanup } from "../types/api";
@@ -26,7 +26,7 @@ export function LiveMatches({
 }) {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [classification, setClassification] = useState<GroupFilter>("");
+  const [classification, setClassification] = useGroupFilter();
   const [sort, setSort] = useState("discovered");
   const running = ["queued", "running"].includes(status);
   const matches = useQuery({

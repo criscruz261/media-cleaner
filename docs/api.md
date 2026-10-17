@@ -16,6 +16,7 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | POST /scans/{id}/pause | Request checkpoint pause |
 | POST /scans/{id}/cancel | Request checkpoint cancellation |
 | POST /scans/{id}/resume | Resume paused/interrupted/failed job when worker has stopped |
+| GET /scans/{id}/selection-summary | Distinct selected/total ready files in visible groups; optional classification filter, across all pages |
 | GET /scans/{id}/warnings | Paginated skipped-analysis and metadata warnings |
 | GET /scans/{id}/events | SSE progress snapshots and heartbeat; closes at a terminal state |
 | GET /volumes | Previously observed volumes; not an exhaustive OS volume picker |
@@ -62,3 +63,5 @@ The batch action is labeled “Review exact duplicate groups”, “Review simil
 Explicit “Select all for deletion” authorization survives live group rebuilds and scan resume for the previously selected members. It remains valid for per-group and filtered batch cleanup, including the final pre-move checks. Newly discovered files are not automatically authorized for removal.
 
 After confirmation, the desktop review window shows validation followed by deletion progress, polling `GET /cleanup/{id}/progress` every 400 ms while execution is pending. `processed` includes moved and failed files; validation is indeterminate until whole-plan checks finish. Progress reads do not take the cleanup execution lock. The final response displays completed/partial results and individual errors.
+
+The scan progress header also displays `selected_files / total_files` from the current group filter. `GET /scans/{id}/selection-summary?classification=EXACT_DUPLICATE|SIMILAR_CONTENT` returns these counts; omit classification for all matching groups. Both counts deduplicate overlapping group memberships and exclude unavailable/deleted files and resolved/pending groups. Selection eligibility matches batch cleanup (exact defaults plus manually reviewed similar selections). The current classification filter is shared between Scanner, Duplicate Review, and preview headers, and counts refresh after saved choices and cleanup.

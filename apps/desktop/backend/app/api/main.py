@@ -372,6 +372,33 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "checkpoint_at": job["checkpoint_at"],
             }
 
+    @app.get("/api/v1/scans/{scan_id}/selection-summary")
+    def selection_summary(
+        scan_id: str,
+        classification: Literal["EXACT_DUPLICATE", "SIMILAR_CONTENT"] | None = None,
+    ):
+        get_scan(scan_id)
+        with sessions() as session:
+            selected = GroupMember.keep.is_(False) & (
+                (DuplicateGroup.classification == "EXACT_DUPLICATE") |
+                (DuplicateGroup.review_status == "reviewed")
+            )
+            query = select(
+                func.count(func.distinct(File.id)),
+                func.count(func.distinct(case((selected, File.id), else_=None))),
+            ).select_from(File).join(GroupMember, GroupMember.file_id == File.id).join(
+                DuplicateGroup, DuplicateGroup.id == GroupMember.group_id
+            ).where(
+                DuplicateGroup.scan_id == scan_id,
+                DuplicateGroup.review_status.not_in(["pending", "resolved"]),
+                DuplicateGroup.member_count > 1,
+                File.status == "ready",
+            )
+            if classification:
+                query = query.where(DuplicateGroup.classification == classification)
+            total, selected_count = session.execute(query).one()
+            return {"total_files": total, "selected_files": selected_count}
+
     @app.get("/api/v1/scans/{scan_id}/warnings")
     def scan_warnings(scan_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
         get_scan(scan_id)

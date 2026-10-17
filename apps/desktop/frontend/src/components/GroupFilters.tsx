@@ -1,4 +1,13 @@
+import { createContext, useContext, useState } from "react";
 export type GroupFilter = "" | "EXACT_DUPLICATE" | "SIMILAR_CONTENT";
+export const GroupFilterContext = createContext<
+  [GroupFilter, (value: GroupFilter) => void] | null
+>(null);
+export function useGroupFilter() {
+  const shared = useContext(GroupFilterContext);
+  const local = useState<GroupFilter>("");
+  return shared ?? local;
+}
 export function GroupFilters({
   classification,
   sort,

@@ -420,3 +420,34 @@ def test_cleanup_progress_is_readable_during_execution_and_tracks_failures(clien
     assert progress["failed"] == 1
     assert progress["current_file"] is None
     assert client.get("/api/v1/cleanup/missing/progress").status_code == 404
+
+
+def test_selection_summary_tracks_filter_choices_and_deduplicates_overlapping_groups(client, workspace):
+    from conftest import scan
+    from app.database.models import DuplicateGroup, GroupMember, File
+    from sqlalchemy import select
+
+    for name, content in [("a.MOV", b"same"), ("a copy.MOV", b"same"), ("other.MOV", b"different")]:
+        (workspace / name).write_bytes(content)
+    job = scan(client, [workspace])
+    with client.app.state.sessions.begin() as session:
+        files = session.scalars(select(File).where(File.scan_id == job["id"])).all()
+        other_id = next(file.id for file in files if file.name == "other.MOV")
+        similar = DuplicateGroup(scan_id=job["id"], classification="SIMILAR_CONTENT",
+                                 evidence={}, recommendation="Test", member_count=3, recoverable=1)
+        session.add(similar)
+        session.flush()
+        similar_id = similar.id
+        for file in files:
+            session.add(GroupMember(group_id=similar_id, file_id=file.id, keep=True))
+    url = f"/api/v1/scans/{job['id']}/selection-summary"
+    assert client.get(url).json() == {"selected_files": 1, "total_files": 3}
+    assert client.get(url + "?classification=EXACT_DUPLICATE").json() == {"selected_files": 1, "total_files": 2}
+    assert client.get(url + "?classification=SIMILAR_CONTENT").json() == {"selected_files": 0, "total_files": 3}
+    assert client.post(f"/api/v1/groups/{similar_id}/review", json={"changes": {other_id: False}}).status_code == 200
+    assert client.get(url).json() == {"selected_files": 2, "total_files": 3}
+    assert client.get(url + "?classification=SIMILAR_CONTENT").json() == {"selected_files": 1, "total_files": 3}
+    with client.app.state.sessions.begin() as session:
+        session.get(File, other_id).status = "trashed"
+    assert client.get(url).json() == {"selected_files": 1, "total_files": 2}
+    assert client.get(url + "?classification=wrong").status_code == 422
