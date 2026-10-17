@@ -1162,9 +1162,17 @@ footer span:last-child {
   color: #173d24;
 }
 .cleanup-review-deleted {
-  background: #ffedec;
-  border-color: #e9aaa4;
-  color: #6b211c;
+  background: #ffc9c4;
+  border: 2px solid #c7372b;
+  color: #681b16;
+}
+.cleanup-review-deleted .cleanup-review-file {
+  background: #ffaaa2;
+  border: 2px solid #b72c23;
+}
+.cleanup-review-deleted h4 {
+  color: #831d16;
+  font-weight: 800;
 }
 .cleanup-review-columns h4 {
   margin: 0 0 12px;

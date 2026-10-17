@@ -443,3 +443,33 @@ def test_exact_live_group_preselects_one_keeper_before_scan_finishes(client, wor
         }
     finally:
         matcher.close()
+
+
+def test_select_all_keep_none_survives_group_rebuild_and_batch_cleanup(client, workspace):
+    from conftest import duplicate_group
+    from app.grouping.live import LiveMatcher
+
+    original = duplicate_group(client, workspace)
+    assert client.post(f"/api/v1/groups/{original['id']}/review", json={"keep_ids": []}).status_code == 200
+    matcher = LiveMatcher(client.app.state.sessions, original["scan_id"], {"mode": "exact"}, lambda: None)
+    try:
+        for file in original["files"]:
+            matcher.add(file["id"])
+        matcher.finish()
+    finally:
+        matcher.close()
+    groups = client.get(f"/api/v1/groups?scan_id={original['scan_id']}").json()["items"]
+    assert groups[0]["evidence"]["allow_keep_none"] is True
+    response = client.post("/api/v1/cleanup/plan-selected", json={
+        "scan_id": original["scan_id"], "classification": "EXACT_DUPLICATE", "destination": "quarantine",
+    })
+    assert response.status_code == 201, response.text
+    plan = response.json()
+    assert len(plan["items"]) == 2
+    assert all(item["keeper"] is None for item in plan["items"])
+    result = client.post("/api/v1/cleanup/execute", json={
+        "plan_id": plan["id"], "token": plan["token"], "confirmed": True,
+    })
+    assert result.status_code == 200, result.text
+    assert result.json()["status"] == "completed", result.text
+    assert not any(workspace.glob("*.MOV"))

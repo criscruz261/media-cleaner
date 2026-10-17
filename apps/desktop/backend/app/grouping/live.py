@@ -32,6 +32,19 @@ class LiveMatcher:
                 select(FileReviewChoice).join(File).where(File.scan_id == scan_id)
             )
         }
+        # Group rows are rebuilt on resume/live cleanup. Preserve the explicit
+        # keep-none action alongside file choices, rather than losing its flag.
+        self.keep_none_files = set()
+        for group in self.session.scalars(select(DuplicateGroup).where(
+            DuplicateGroup.scan_id == scan_id, DuplicateGroup.review_status == "reviewed",
+        )):
+            if group.evidence.get("allow_keep_none"):
+                self.keep_none_files.update(
+                    (member.file_id, group.classification)
+                    for member in self.session.scalars(
+                        select(GroupMember).where(GroupMember.group_id == group.id, GroupMember.keep.is_(False))
+                    )
+                )
         groups = select(DuplicateGroup.id).where(DuplicateGroup.scan_id == scan_id)
         self.session.execute(delete(GroupMember).where(GroupMember.group_id.in_(groups)))
         self.session.execute(delete(DuplicateGroup).where(DuplicateGroup.scan_id == scan_id))
@@ -141,6 +154,14 @@ class LiveMatcher:
                     restored = True
             if restored and group.review_status != "pending":
                 group.review_status = "reviewed"
+                members = self.session.scalars(
+                    select(GroupMember).where(GroupMember.group_id == group.id)
+                ).all()
+                if members and all(
+                    not member.keep and (member.file_id, group.classification) in self.keep_none_files
+                    for member in members
+                ):
+                    group.evidence = dict(group.evidence, allow_keep_none=True)
         self.session.commit()
 
     def finish(self):

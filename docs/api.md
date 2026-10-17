@@ -57,3 +57,5 @@ Cleanup plan items include optional `review_files` once per group: a saved snaps
 Group-specific review and cleanup validation errors include the persistent group ID and up to three member filenames. The ID is also displayed on review cards and cleanup preview groups, so errors can be matched to groups even when filtering or sorting changes their page positions.
 
 The batch action is labeled “Review exact duplicate groups”, “Review similar media groups”, or “Review selected groups” according to the active filter. It opens confirmation rather than executing deletion. The review scope is also displayed in that window and comes from the actual plan items.
+
+Explicit “Select all for deletion” authorization survives live group rebuilds and scan resume for the previously selected members. It remains valid for per-group and filtered batch cleanup, including the final pre-move checks. Newly discovered files are not automatically authorized for removal.
