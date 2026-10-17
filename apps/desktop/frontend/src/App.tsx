@@ -379,7 +379,7 @@ export function App() {
                     </span>
                   </header>
                   <div className="sticky-review-progress">
-                    <ScanProgress scanId={scanId} />
+                    <ScanProgress scanId={scanId} reviewAction />
                   </div>
                   <main className="content">
                     {page === "Dashboard" ? (

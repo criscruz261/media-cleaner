@@ -54,3 +54,38 @@ it.each(["", "EXACT_DUPLICATE", "SIMILAR_CONTENT"] as const)(
     }
   },
 );
+
+it("finds a banner that loads later and toggles review when scrolling", async () => {
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <BatchCleanup scanId="scan" onPlan={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  const button = screen.getByRole("button", { name: "Review selected groups" });
+  let top = 300;
+  vi.spyOn(button, "getBoundingClientRect").mockImplementation(
+    () => ({ top, bottom: top + 32 }) as DOMRect,
+  );
+  const banner = document.createElement("div");
+  banner.className = "sticky-review-progress";
+  banner.innerHTML = '<div id="sticky-review-action"></div>';
+  vi.spyOn(banner, "getBoundingClientRect").mockReturnValue({
+    bottom: 100,
+  } as DOMRect);
+  document.body.appendChild(banner);
+  try {
+    top = 20;
+    fireEvent.scroll(window);
+    await waitFor(() =>
+      expect(banner.querySelector("button")).toHaveTextContent(
+        "Review selected groups",
+      ),
+    );
+    top = 300;
+    fireEvent.scroll(window);
+    await waitFor(() => expect(banner.querySelector("button")).toBeNull());
+  } finally {
+    view.unmount();
+    banner.remove();
+  }
+});

@@ -11,7 +11,13 @@ import {
 import { api } from "../services/api";
 import type { Scan } from "../types/api";
 
-export function ScanProgress({ scanId }: { scanId: string }) {
+export function ScanProgress({
+  scanId,
+  reviewAction = false,
+}: {
+  scanId: string;
+  reviewAction?: boolean;
+}) {
   const client = useQueryClient();
   const resetScanner = useContext(ScannerResetContext);
   const classification = useContext(GroupFilterContext)?.[0] ?? "";
@@ -72,6 +78,7 @@ export function ScanProgress({ scanId }: { scanId: string }) {
               · all pages
             </small>
           </strong>
+          {reviewAction && <div id="sticky-review-action" />}
           {active && (
             <button
               disabled={busy}

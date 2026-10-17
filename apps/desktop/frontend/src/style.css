@@ -2237,3 +2237,57 @@ footer span:last-child {
   margin: 8px 0;
   gap: 10px 14px;
 }
+
+.panel.batch-cleanup {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.batch-cleanup-summary {
+  flex: 1 1 240px;
+}
+.panel.batch-cleanup h2 {
+  display: block;
+  margin: 0 0 3px;
+  font-size: 12px;
+}
+.panel.batch-cleanup p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.panel.batch-cleanup .group-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+.panel.batch-cleanup select {
+  width: auto;
+  max-width: 100%;
+  padding: 7px 9px;
+  font-size: 11px;
+}
+.panel.batch-cleanup button {
+  min-height: 32px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.panel.batch-cleanup > .error {
+  flex-basis: 100%;
+}
+
+#sticky-review-action {
+  margin-left: auto;
+}
+#sticky-review-action:empty {
+  display: none;
+}
+#sticky-review-action button {
+  padding: 7px 12px;
+  font-size: 11px;
+}
