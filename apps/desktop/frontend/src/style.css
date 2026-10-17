@@ -2102,38 +2102,38 @@ footer span:last-child {
 }
 
 .group-card[data-compact-level="1"] {
-  --density-padding: 16px;
-  --density-gap: 12px;
-  --density-preview: 190px;
-  --density-column: 230px;
-  --density-button: 36px;
-}
-.group-card[data-compact-level="2"] {
-  --density-padding: 13px;
-  --density-gap: 10px;
-  --density-preview: 145px;
-  --density-column: 205px;
-  --density-button: 34px;
-}
-.group-card[data-compact-level="3"] {
   --density-padding: 10px;
   --density-gap: 8px;
-  --density-preview: 105px;
-  --density-column: 180px;
+  --density-preview: 150px;
+  --density-column: 200px;
   --density-button: 32px;
 }
-.group-card[data-compact-level="4"] {
+.group-card[data-compact-level="2"] {
   --density-padding: 8px;
   --density-gap: 6px;
-  --density-preview: 75px;
-  --density-column: 160px;
+  --density-preview: 115px;
+  --density-column: 185px;
   --density-button: 30px;
 }
-.group-card[data-compact-level="5"] {
+.group-card[data-compact-level="3"] {
   --density-padding: 6px;
+  --density-gap: 5px;
+  --density-preview: 85px;
+  --density-column: 165px;
+  --density-button: 30px;
+}
+.group-card[data-compact-level="4"] {
+  --density-padding: 5px;
   --density-gap: 4px;
-  --density-preview: 50px;
-  --density-column: 140px;
+  --density-preview: 65px;
+  --density-column: 150px;
+  --density-button: 28px;
+}
+.group-card[data-compact-level="5"] {
+  --density-padding: 4px;
+  --density-gap: 3px;
+  --density-preview: 45px;
+  --density-column: 135px;
   --density-button: 28px;
 }
 .group-card[data-compact-level] {
@@ -2321,4 +2321,45 @@ footer span:last-child {
 .group-position > span {
   color: var(--muted);
   font-size: 10px;
+}
+
+/* Keep group chrome small at every density without hiding controls. */
+.group-card[data-compact-level] .group-summary,
+.group-card[data-compact-level] .group-actionbar,
+.group-card[data-compact-level] .media-card {
+  padding: max(4px, calc(var(--density-padding) - 3px));
+}
+.group-card .group-summary > .section-heading {
+  margin-bottom: 3px;
+  gap: 4px 8px;
+}
+.group-card .group-summary h2 {
+  margin: 0;
+}
+.group-card .media-details {
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.group-card .media-card > .checkbox-label {
+  margin-bottom: 4px;
+}
+.group-card .group-actionbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.group-card .group-actions-heading {
+  margin: 0;
+  gap: 8px;
+}
+.group-card .group-actionbar .group-actions {
+  flex: 1 1 auto;
+  gap: 5px;
+}
+.group-card .group-selection-help {
+  margin-top: 4px;
+}
+.group-card > .pagination {
+  margin: 5px 0;
 }
