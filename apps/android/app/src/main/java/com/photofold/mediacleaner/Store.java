@@ -330,6 +330,24 @@ final class Store extends SQLiteOpenHelper {
         && group.files.stream().noneMatch(file -> keep(group, file));
   }
 
+  synchronized void toggleSelectAll(String groupId) {
+    Group group = group(groupId);
+    if (group == null) throw new IllegalArgumentException("Group changed. Reopen review.");
+    if (group.files.stream().anyMatch(file -> keep(group, file))) {
+      selectAll(groupId);
+      return;
+    }
+    SQLiteDatabase db = getWritableDatabase();
+    db.beginTransaction();
+    try {
+      for (Media file : group.files) select(groupId, file.uri, false, true);
+      put("keepNone:" + groupId, "");
+      db.setTransactionSuccessful();
+    } finally {
+      db.endTransaction();
+    }
+  }
+
   synchronized void selectAll(String groupId) {
     Group group = group(groupId);
     if (group == null) throw new IllegalArgumentException("Group changed. Reopen review.");

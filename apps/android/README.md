@@ -4,19 +4,48 @@ A standalone, offline native Android app for Android 11+ (API 30+). It does not 
 
 ## Interface
 
+Dark mode is enabled by default. Use **Settings → Appearance → Dark mode** to
+switch between dark and light themes; the choice persists after restarting.
+Page surfaces, controls, dialogs, system bars, and keep/delete colors follow the
+selected theme. Switching themes preserves saved scan and review data.
+
 The phone app follows the desktop's five sections using bottom navigation:
 **Dashboard**, **Scanner**, **Review**, **Cleanup**, and **Settings**. The green
 and cream palette, bordered cards, buttons, preview controls, and cleanup dialogs
 follow the desktop style with touch-sized controls. Labels use sentence case.
-Review displays result groups side by side as width permits (up to three columns),
-with Comfortable, Compact, and Very compact density options saved on the device.
+Review displays numbered groups as full-width rows. Each row shows its position
+in the active filter, including unloaded pages. Group actions sit together below
+the files; thumbnails and compact filenames come first, with file selection
+controls beneath them.
+Files within each group appear side by side as width permits (up to four
+columns), with Comfortable, Compact, and Very compact density options saved on
+the device. Narrow screens fall back to a single file column.
 Its banner shows filtered group counts and unique selected/total files across all
-pages. Exact-duplicate and similar-media filters also scope batch cleanup.
+pages. Scrolling on any page collapses its header to a 48 dp summary. Review keeps
+counts and the active filter; Dashboard keeps file/group counts; Scanner keeps
+status and progress; Cleanup keeps request/pending-confirmation information;
+Settings keeps storage/privacy context. Running scan progress remains available
+in compact summaries. Return to the top, swipe downward, or tap the summary to expand it. Header transitions are
+animated, and the compact summary shows an expand arrow. Upward/downward
+gestures work even when the page fits entirely onscreen. Exact-duplicate and similar-media filters also scope batch cleanup.
 File cards are green for kept files and red for files selected for deletion;
 checkboxes and text provide the same state without relying on color alone.
 The checkpoint-and-shutdown action is red. Scan progress stays visible
 across sections and inside media previews. Switching sections preserves review
 selections, filters, expanded groups, and each section's scroll position.
+
+Scanner uses three steps: **Choose media → Scan or resume → Review matches**.
+Media selection appears before the access button. Scan and Resume share a row;
+checkpoint controls remain available, with shutdown under expandable Session
+options. Contextual guidance explains when matches can be reviewed.
+
+Review uses **Choose matches → Compare and select → Clean up selections**.
+Filter and sort controls share a row, compactness remains adjustable, and batch
+cleanup follows the results with an explanation of the app preview and Android
+confirmation. Per-group selection and deletion actions remain available. Select all for deletion
+changes to Unselect all for deletion when every file is selected; unselecting
+keeps every file. Explicit file choices are included in batch cleanup without
+a separate mark-reviewed action.
 
 Dashboard shows the latest scan's file count, exact and similar group counts,
 and shortcuts. Scanner handles album selection and checkpoints; Review contains
@@ -33,7 +62,7 @@ the desktop's organization while showing only features available on Android.
 3. Watch live groups, file progress, cache reuse and skipped-file warnings. **Pause** and **Resume** preserve completed-file checkpoints. Closing the activity does not stop the foreground scan; a process restart leaves the job available for explicit Resume.
 4. Inspect thumbnails and full previews. **Compare similar videos** provides muted playback, shared play/pause/reset and deletion checkboxes. It pages through up to four simultaneous players to respect phone decoder limits. Unmute individual players to check audio.
 5. Select unwanted files in a group and choose **Delete selected**. Use **Select all for deletion (keep none)** to remove the whole group; RAW and possible photo/video companion files are protected. Similar groups initially keep every item. Unambiguous copy filenames receive an advisory original recommendation after completion; explicit choices take priority.
-For multiple groups, make selections in each, then use **Delete selected across groups** above the groups. This includes reviewed groups outside the visible page and excludes untouched suggestions. One combined preview and Android confirmation covers up to 100 distinct files, including keep-none groups.
+For multiple groups, make selections in each, then use **Delete selected across groups** above the groups. This includes groups with explicit choices outside the visible page and excludes untouched suggestions. One combined preview and Android confirmation covers up to 100 distinct files, including keep-none groups.
 
 6. Review the selected filenames and retained file (or the **Keep none** notice), check the confirmation box, then continue. The app freshly hashes selected files and their retained copy before opening Android's own Trash confirmation. Scanning pauses for this workflow and resumes afterward when it was running. Cancelling does not move files. There is no permanent-delete operation.
 7. **Cleanup and recovery** records the outcome and can request Android confirmation to restore items from Trash. Availability and retention are controlled by the device; gallery Trash is another recovery route. Rescan restored files to include them again.

@@ -1,5 +1,5 @@
 <resources>
-    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="AppThemeLight" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#315F48</item>
         <item name="android:colorControlNormal">#69786D</item>
@@ -18,6 +18,28 @@
         <item name="android:textColorPrimary">#233C32</item>
         <item name="android:textColorSecondary">#69786D</item>
         <item name="android:windowBackground">@drawable/dialog_surface</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="AppTheme" parent="AppThemeDark" />
+    <style name="AppThemeDark" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#93CBA4</item>
+        <item name="android:colorControlNormal">#ACB8AE</item>
+        <item name="android:textColorPrimary">#E3EEE5</item>
+        <item name="android:textColorSecondary">#ACB8AE</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#101712</item>
+        <item name="android:navigationBarColor">#19231D</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">@color/dark_canvas</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:alertDialogTheme">@style/CleanerDialogDark</item>
+    </style>
+    <style name="CleanerDialogDark" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">#93CBA4</item>
+        <item name="android:textColorPrimary">#E3EEE5</item>
+        <item name="android:textColorSecondary">#ACB8AE</item>
+        <item name="android:windowBackground">@drawable/dialog_surface_dark</item>
         <item name="android:fontFamily">sans</item>
     </style>
 </resources>

@@ -217,8 +217,8 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     launch(scan=True)
     find("Scan complete.", timeout=180)
     # All five destinations remain reachable without changing the scan results.
-    for page, expected in [("Dashboard", "Library overview"), ("Scanner", "Scan your library"),
-                           ("Review", "Matches found so far"), ("Cleanup", "Cleanup and recovery"),
+    for page, expected in [("Dashboard", "Library overview"), ("Scanner", "1. Choose media"),
+                           ("Review", "1. Choose matches"), ("Cleanup", "Cleanup and recovery"),
                            ("Settings", "Media access")]:
         navigate(page)
         find(expected)
@@ -272,7 +272,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     screenshot("group-preview.png")
     tap(find("Close preview"))
     # Select the photo group just previewed, then independently review the video group.
-    tap(find("Select all for deletion (keep none)", scroll=True, timeout=35))
+    tap(find("Select all for deletion", scroll=True, timeout=35))
     tap(find("Compare similar videos", scroll=True, timeout=40))
     find("Play all")
     screenshot("video-comparison.png")
@@ -287,7 +287,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     find("Keep none: every selected file")
     assert find("Continue to Android confirmation").get("enabled") == "false"
     tap(find("Cancel"))
-    tap(find("Select all for deletion (keep none)", scroll=True, timeout=35))
+    # Selections remain active after cancelling; select-all is now a toggle.
     tap(find("Delete selected videos (2)", scroll=True, timeout=35))
     print(
         "Checking one combined preview and Android confirmation across groups",
@@ -299,13 +299,15 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     # A photo can also belong to an exact group. Explicitly authorize keeping
     # none there before batch-selecting its retained copy through a similar group.
     db = snapshot()
-    exact_ids = [row[0] for row in db.execute("SELECT id FROM groups WHERE classification='EXACT_DUPLICATE'")]
+    flags = dict(db.execute("SELECT key,value FROM meta"))
+    exact_ids = [row[0] for row in db.execute("SELECT id FROM groups WHERE classification='EXACT_DUPLICATE'")
+                 if not flags.get("keepNone:" + row[0])]
     db.close()
     launch()
     navigate("Review")
     for group_id in exact_ids:
         find("Group " + group_id, scroll=True, timeout=90)
-        tap(find("Select all for deletion (keep none)", scroll=True, timeout=30))
+        tap(find("Select all for deletion", scroll=True, timeout=30))
     adb("shell", "am", "force-stop", PACKAGE)
     launch()
     navigate("Review")

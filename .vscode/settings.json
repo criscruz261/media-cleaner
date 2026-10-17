@@ -8,5 +8,6 @@
     "python.testing.pytestArgs": [
         "tests"
     ],
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "embedroid.sdkPath": "/Users/cristophercruz/Documents/VSCode/media-cleaner/.tools/android/sdk"
 }

@@ -19,7 +19,7 @@ import java.util.concurrent.*;
 import org.json.*;
 
 public final class MainActivity extends Activity {
-  private static final int INK = 0xff233c32,
+  private int INK = 0xff233c32,
       GREEN = 0xff315f48,
       CANVAS = 0xfff7f8f5,
       BORDER = 0xffe2e7df,
@@ -28,6 +28,8 @@ public final class MainActivity extends Activity {
   private final Map<String, ScrollView> pages = new LinkedHashMap<>();
   private final Map<String, Button> navigation = new LinkedHashMap<>();
   private String currentPage = "Dashboard";
+  private boolean darkMode;
+  private int SURFACE = Color.WHITE, ON_PRIMARY = Color.WHITE;
   private TextView pageTitle,
       pageDescription,
       dashboardFiles,
@@ -48,7 +50,15 @@ public final class MainActivity extends Activity {
       };
   private GridLayout groups;
   private LinearLayout history;
-  private TextView reviewSummary;
+  private TextView headerSummary;
+  private LinearLayout brand, pageHeader, live;
+  private boolean headerCollapsed, headerChanging;
+  private LinearLayout screenLayout;
+  private View bottomNavigation, pageContent;
+  private float headerTouchX, headerTouchY;
+  private boolean headerGestureEligible, headerGestureHandled;
+  private final Runnable headerSettled = () -> headerChanging = false;
+  private String reviewDetails = "";
   private int compactLevel = 1, lastGridWidth = -1, lastGridCount = -1;
 
   private final Map<String, LinearLayout> groupCards = new LinkedHashMap<>();
@@ -56,13 +66,14 @@ public final class MainActivity extends Activity {
   private final Set<String> expandedGroups = new HashSet<>();
   private final List<TextView> reviewProgress = new ArrayList<>();
   private TextView groupCount, emptyGroups;
-  private Button batchDelete;
+  private Button batchDelete, moreGroups, reviewStart;
   private TextView progress, activity, access;
   private ProgressBar bar;
   private Spinner albums;
   private String groupFilter = "";
   private int groupSort = 0;
   private Button start, pause, resume;
+  private TextView scannerNext;
   private String stamp = "";
   private int limit = 5;
   private boolean cleanupBusy = false;
@@ -80,10 +91,23 @@ public final class MainActivity extends Activity {
 
   @Override
   public void onCreate(Bundle state) {
+    darkMode = getPreferences(MODE_PRIVATE).getBoolean("darkMode", true);
+    setTheme(darkMode ? R.style.AppThemeDark : R.style.AppThemeLight);
     super.onCreate(state);
+    if (darkMode) {
+      INK = 0xffe3eee5;
+      GREEN = 0xff93cba4;
+      CANVAS = 0xff101712;
+      BORDER = 0xff34423a;
+      MUTED = 0xffacb8ae;
+      TINT = 0xff26372d;
+      SURFACE = 0xff19231d;
+      ON_PRIMARY = 0xff102217;
+    }
     store = ((CleanerApp) getApplication()).store;
     compactLevel = getPreferences(MODE_PRIVATE).getInt("compactLevel", 1);
     LinearLayout screen = column();
+    screenLayout = screen;
     screen.setPadding(0, 0, 0, 0);
     screen.setBackgroundColor(CANVAS);
     setContentView(screen);
@@ -93,24 +117,25 @@ public final class MainActivity extends Activity {
           screen.setPadding(edges.left, edges.top, edges.right, edges.bottom);
           return insets;
         });
-    LinearLayout brand = column();
+    brand = column();
     brand.setPadding(dp(20), dp(10), dp(20), dp(8));
-    brand.setBackgroundColor(Color.WHITE);
+    brand.setBackgroundColor(SURFACE);
     TextView wordmark = label(brand, "Media Cleaner");
     wordmark.setTextSize(18);
     wordmark.setTypeface(null, Typeface.BOLD);
     screen.addView(brand);
-    LinearLayout pageHeader = column();
+    pageHeader = column();
     pageHeader.setPadding(dp(20), dp(10), dp(20), dp(4));
     pageTitle = label(pageHeader, "Dashboard");
     pageTitle.setTextSize(28);
     pageTitle.setTypeface(null, Typeface.BOLD);
     pageDescription = label(pageHeader, "Your library at a glance.");
-    reviewSummary = label(pageHeader, "");
-    reviewSummary.setTextSize(13);
-    reviewSummary.setTextColor(GREEN);
+    headerSummary = label(pageHeader, "");
+    headerSummary.setTextSize(13);
+    headerSummary.setTextColor(GREEN);
+    headerSummary.setOnClickListener(ignored -> setHeaderCollapsed(false));
     screen.addView(pageHeader);
-    LinearLayout live = column();
+    live = column();
     live.setPadding(dp(20), 0, dp(20), dp(6));
     progress = label(live, "");
     progress.setTextSize(12);
@@ -124,6 +149,7 @@ public final class MainActivity extends Activity {
     activity.setEllipsize(android.text.TextUtils.TruncateAt.END);
     screen.addView(live);
     FrameLayout content = new FrameLayout(this);
+    pageContent = content;
     screen.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
     for (String name : List.of("Dashboard", "Scanner", "Review", "Cleanup", "Settings")) {
       ScrollView page = new ScrollView(this);
@@ -134,9 +160,20 @@ public final class MainActivity extends Activity {
       pages.put(name, page);
       content.addView(page, new FrameLayout.LayoutParams(-1, -1));
     }
+    for (Map.Entry<String, ScrollView> entry : pages.entrySet()) {
+      entry
+          .getValue()
+          .setOnScrollChangeListener(
+              (view, x, y, oldX, oldY) -> {
+                if (!currentPage.equals(entry.getKey()) || headerChanging) return;
+                if (y <= dp(4) && y < oldY) setHeaderCollapsed(false);
+                else if (y > dp(48) && y > oldY) setHeaderCollapsed(true);
+              });
+    }
     LinearLayout bottom = row();
+    bottomNavigation = bottom;
     bottom.setPadding(dp(4), dp(6), dp(4), dp(6));
-    bottom.setBackgroundColor(Color.WHITE);
+    bottom.setBackgroundColor(SURFACE);
     int[] icons = {
       R.drawable.nav_dashboard,
       R.drawable.nav_scanner,
@@ -174,46 +211,55 @@ public final class MainActivity extends Activity {
     button(recent, "View cleanup history", () -> switchPage("Cleanup"));
     label(dashboard, "Private by design · All media processing stays on this device.");
     LinearLayout body = card(pageBody("Scanner"));
-    heading(body, "Scan your library", 20);
-    label(
-        body,
-        "Find exact copies and similar photos/videos on this phone. Everything stays on-device.");
-    access = label(body, "");
-    button(body, "Allow / change photo and video access", this::requestAccess);
+    heading(body, "1. Choose media", 18);
     albums = new Spinner(this);
+    albums.setContentDescription("Media source");
     albums.setAdapter(
         new ArrayAdapter<>(
             this, android.R.layout.simple_spinner_dropdown_item, List.of("All accessible media")));
-    body.addView(albums);
-    label(body, "Media source");
-    LinearLayout actions = column();
+    body.addView(albums, new LinearLayout.LayoutParams(-1, dp(48)));
+    button(body, "Allow / change photo and video access", this::requestAccess);
+    access = hint(body, "");
+    heading(body, "2. Scan or resume", 18);
+    hint(body, "Start a new scan, or resume your saved checkpoint.");
+    LinearLayout actions = row();
     body.addView(actions);
     start = button(actions, "Scan", () -> start(false));
     primary(start);
-    pause = button(actions, "Save checkpoint", () -> saveCheckpoint(false));
     resume = button(actions, "Resume", () -> start(true));
-    danger(button(body, "Save checkpoint and shut down", () -> saveCheckpoint(true)));
-    label(
+    pause = button(body, "Save checkpoint", () -> saveCheckpoint(false));
+    heading(body, "3. Review matches", 18);
+    scannerNext = hint(body, "Scan first, then compare matches and choose what to keep.");
+    primary(button(body, "Review matches", () -> switchPage("Review")));
+    LinearLayout sessionOptions = column();
+    sessionOptions.setVisibility(View.GONE);
+    button(
         body,
-        "Completed files and selections are saved automatically in app storage. Resume revalidates"
-            + " access and reuses unchanged files. App data survives closing and rotation, but not"
-            + " uninstall or Clear storage.");
-    button(body, "Review matches found so far", () -> switchPage("Review"));
+        "Session options",
+        () ->
+            sessionOptions.setVisibility(
+                sessionOptions.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
+    body.addView(sessionOptions);
+    hint(
+        sessionOptions,
+        "Completed files and choices save automatically. Save a checkpoint to pause; Resume"
+            + " continues later.");
+    danger(button(sessionOptions, "Save checkpoint and shut down", () -> saveCheckpoint(true)));
     body = card(pageBody("Review"));
-    heading(body, "Review options", 20);
-    label(
-        body,
-        "Choose what to keep. Matches update while scanning; Android confirms every move to"
-            + " Trash.");
-    label(body, "Filter groups (also scopes batch deletion)");
+    heading(body, "1. Choose matches", 18);
+    LinearLayout filterRow = row();
+    body.addView(filterRow);
+    LinearLayout filterField = field(filterRow, "Filter");
+    LinearLayout sortField = field(filterRow, "Sort");
     Spinner filter = new Spinner(this);
     filter.setAdapter(
         new ArrayAdapter<>(
             this,
             android.R.layout.simple_spinner_dropdown_item,
             List.of("All matches", "Exact duplicates only", "Similar media only")));
-    body.addView(filter);
-    label(body, "Compact level");
+    filter.setContentDescription("Filter groups");
+    filterField.addView(filter, new LinearLayout.LayoutParams(-1, dp(48)));
+    LinearLayout compactField = field(body, "Compact level");
     Spinner compact = new Spinner(this);
     compact.setAdapter(
         new ArrayAdapter<>(
@@ -221,7 +267,8 @@ public final class MainActivity extends Activity {
             android.R.layout.simple_spinner_dropdown_item,
             List.of("Comfortable", "Compact", "Very compact")));
     compact.setSelection(compactLevel);
-    body.addView(compact);
+    compact.setContentDescription("Compact level");
+    compactField.addView(compact, new LinearLayout.LayoutParams(-1, dp(48)));
     compact.setOnItemSelectedListener(
         new AdapterView.OnItemSelectedListener() {
           public void onNothingSelected(AdapterView<?> parent) {}
@@ -236,7 +283,6 @@ public final class MainActivity extends Activity {
             if (groups != null) refresh();
           }
         });
-    label(body, "Sort groups");
     Spinner sort = new Spinner(this);
     sort.setAdapter(
         new ArrayAdapter<>(
@@ -247,7 +293,8 @@ public final class MainActivity extends Activity {
                 "Exact duplicates first",
                 "Most recoverable space",
                 "Most files")));
-    body.addView(sort);
+    sort.setContentDescription("Sort groups");
+    sortField.addView(sort, new LinearLayout.LayoutParams(-1, dp(48)));
     AdapterView.OnItemSelectedListener options =
         new AdapterView.OnItemSelectedListener() {
           public void onNothingSelected(AdapterView<?> parent) {}
@@ -267,29 +314,34 @@ public final class MainActivity extends Activity {
         };
     filter.setOnItemSelectedListener(options);
     sort.setOnItemSelectedListener(options);
-    label(
-        body,
-        "Batch cleanup includes reviewed groups across all pages of this filter. Review each"
-            + " group's keeper before including it.");
-    batchDelete = button(body, "Delete selected across groups", () -> preview(null));
     body = pageBody("Review");
-    heading(body, "Matches found so far", 22);
-    label(body, "Green · Keep    Red · Delete selected");
+    heading(body, "2. Compare and select", 18);
+    hint(body, "Open a thumbnail to compare. Green keeps a file; red selects it for deletion.");
     emptyGroups = label(body, "");
+    reviewStart = button(body, "Start a scan", () -> switchPage("Scanner"));
     groups = new GridLayout(this);
     groups.setColumnCount(1);
     groups.setUseDefaultMargins(false);
     groups.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> layoutGroups());
     body.addView(groups, new LinearLayout.LayoutParams(-1, -2));
     groupCount = label(body, "");
-    button(
+    moreGroups =
+        button(
+            body,
+            "Show more groups",
+            () -> {
+              limit += 5;
+              stamp = "";
+              refresh();
+            });
+    body = card(pageBody("Review"));
+    heading(body, "3. Clean up selections", 18);
+    hint(
         body,
-        "Show more groups",
-        () -> {
-          limit += 5;
-          stamp = "";
-          refresh();
-        });
+        "Choose files for deletion, then preview your selections across all pages of this filter."
+            + " Android asks for final confirmation.");
+    batchDelete = button(body, "Delete selected across groups", () -> preview(null));
+    primary(batchDelete);
     body = card(pageBody("Cleanup"));
     heading(body, "Cleanup and recovery", 22);
     label(
@@ -299,6 +351,20 @@ public final class MainActivity extends Activity {
     history = column();
     body.addView(history);
     LinearLayout settings = pageBody("Settings");
+    LinearLayout appearance = card(settings);
+    heading(appearance, "Appearance", 20);
+    Switch darkSwitch = new Switch(this);
+    darkSwitch.setText("Dark mode");
+    darkSwitch.setTextColor(INK);
+    darkSwitch.setMinHeight(dp(48));
+    darkSwitch.setChecked(darkMode);
+    appearance.addView(darkSwitch, new LinearLayout.LayoutParams(-1, -2));
+    hint(appearance, "Dark mode is the default. Your choice is saved on this device.");
+    darkSwitch.setOnCheckedChangeListener(
+        (view, checked) -> {
+          getPreferences(MODE_PRIVATE).edit().putBoolean("darkMode", checked).apply();
+          recreate();
+        });
     LinearLayout permissions = card(settings);
     heading(permissions, "Media access", 20);
     label(
@@ -347,6 +413,7 @@ public final class MainActivity extends Activity {
   @Override
   protected void onDestroy() {
     handler.removeCallbacks(tick);
+    handler.removeCallbacks(headerSettled);
     if (comparison != null) comparison.dismiss();
     io.shutdown();
     thumbnails.shutdown();
@@ -366,13 +433,13 @@ public final class MainActivity extends Activity {
   private void switchPage(String name) {
     if (!pages.containsKey(name)) name = "Dashboard";
     currentPage = name;
-    reviewSummary.setVisibility(name.equals("Review") ? View.VISIBLE : View.GONE);
+    setHeaderCollapsed(pages.get(name).getScrollY() > dp(48));
     for (Map.Entry<String, ScrollView> page : pages.entrySet())
       page.getValue().setVisibility(page.getKey().equals(name) ? View.VISIBLE : View.GONE);
     for (Map.Entry<String, Button> tab : navigation.entrySet()) {
       boolean selected = tab.getKey().equals(name);
       tab.getValue().setSelected(selected);
-      tab.getValue().setBackground(surface(selected ? TINT : Color.WHITE, 0));
+      tab.getValue().setBackground(surface(selected ? TINT : SURFACE, 0));
       tab.getValue().setTypeface(null, selected ? Typeface.BOLD : Typeface.NORMAL);
       tab.getValue().setContentDescription(tab.getKey() + (selected ? ", selected" : ""));
     }
@@ -388,6 +455,113 @@ public final class MainActivity extends Activity {
     if (groups != null) refresh();
   }
 
+  @Override
+  public boolean dispatchTouchEvent(MotionEvent event) {
+    if (event.getActionMasked() == MotionEvent.ACTION_DOWN && bottomNavigation != null) {
+      headerTouchX = event.getRawX();
+      headerTouchY = event.getRawY();
+      int[] navigationPosition = new int[2];
+      bottomNavigation.getLocationOnScreen(navigationPosition);
+      headerGestureEligible = headerTouchY < navigationPosition[1];
+      headerGestureHandled = false;
+    } else if ((event.getActionMasked() == MotionEvent.ACTION_MOVE
+            || event.getActionMasked() == MotionEvent.ACTION_UP)
+        && headerGestureEligible
+        && !headerGestureHandled
+        && !headerChanging) {
+      float dy = event.getRawY() - headerTouchY;
+      float dx = event.getRawX() - headerTouchX;
+      if (Math.abs(dy) > dp(32) && Math.abs(dy) > Math.abs(dx) * 1.2f) {
+        // Observe the gesture without consuming taps, selections, or scrolling.
+        // Downward pulls work even when ScrollView cannot move at all.
+        headerGestureHandled = true;
+        setHeaderCollapsed(dy < 0);
+      }
+    }
+    if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) headerGestureEligible = false;
+    return super.dispatchTouchEvent(event);
+  }
+
+  private void setHeaderCollapsed(boolean collapsed) {
+    if (headerCollapsed == collapsed) {
+      updateHeaderSummary();
+      return;
+    }
+    if (screenLayout.isLaidOut()) {
+      android.transition.ChangeBounds bounds = new android.transition.ChangeBounds();
+      bounds.addTarget(pageHeader).addTarget(headerSummary).addTarget(pageContent);
+      android.transition.Fade fade = new android.transition.Fade();
+      fade.addTarget(brand).addTarget(pageTitle).addTarget(pageDescription).addTarget(live);
+      android.transition.TransitionSet transition =
+          new android.transition.TransitionSet()
+              .addTransition(bounds)
+              .addTransition(fade)
+              .setDuration(260);
+      transition.setInterpolator(new android.view.animation.DecelerateInterpolator());
+      android.transition.TransitionManager.beginDelayedTransition(screenLayout, transition);
+    }
+    headerChanging = true;
+    handler.removeCallbacks(headerSettled);
+    handler.postDelayed(headerSettled, 350);
+    headerCollapsed = collapsed;
+    brand.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+    pageTitle.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+    pageDescription.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+    live.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+    pageHeader.setPadding(dp(20), dp(collapsed ? 0 : 10), dp(20), dp(collapsed ? 0 : 4));
+    headerSummary.setMinHeight(collapsed ? dp(48) : 0);
+    headerSummary.setGravity(Gravity.CENTER_VERTICAL);
+    headerSummary.setMaxLines(collapsed ? 2 : Integer.MAX_VALUE);
+    headerSummary.setEllipsize(collapsed ? android.text.TextUtils.TruncateAt.END : null);
+    android.graphics.drawable.Drawable arrow = null;
+    if (collapsed) {
+      arrow = getDrawable(android.R.drawable.arrow_down_float).mutate();
+      arrow.setTint(GREEN);
+      arrow.setBounds(0, 0, dp(16), dp(16));
+    }
+    headerSummary.setCompoundDrawablePadding(dp(8));
+    headerSummary.setCompoundDrawables(null, null, arrow, null);
+    updateHeaderSummary();
+  }
+
+  private void updateHeaderSummary() {
+    headerSummary.setVisibility(
+        headerCollapsed || currentPage.equals("Review") ? View.VISIBLE : View.GONE);
+    String text;
+    if (currentPage.equals("Review")) text = (headerCollapsed ? "Review · " : "") + reviewDetails;
+    else
+      text =
+          switch (currentPage) {
+            case "Scanner" ->
+                "Scanner · "
+                    + sentence(store.meta("status", "ready"))
+                    + " · "
+                    + store.meta("processed", "0")
+                    + "/"
+                    + store.meta("total", "0")
+                    + " files";
+            case "Cleanup" ->
+                "Cleanup · "
+                    + store.operations().size()
+                    + " requests"
+                    + (store.meta("pendingOperation", "").isEmpty()
+                        ? ""
+                        : " · Confirmation pending");
+            case "Settings" -> "Settings · On-device · Android Trash";
+            default ->
+                "Dashboard · "
+                    + store.meta("processed", "0")
+                    + " files · "
+                    + store.groupCount("")
+                    + " groups";
+          };
+    if (headerCollapsed && ScanService.running.get() && !currentPage.equals("Scanner"))
+      text += " · Scanning " + store.meta("processed", "0") + "/" + store.meta("total", "0");
+    headerSummary.setText(text);
+    headerSummary.setContentDescription(
+        text + (headerCollapsed ? ". Swipe down or tap to expand the header." : ""));
+  }
+
   private GradientDrawable surface(int color, int border) {
     GradientDrawable drawable = new GradientDrawable();
     drawable.setColor(color);
@@ -399,11 +573,31 @@ public final class MainActivity extends Activity {
   private LinearLayout card(LinearLayout parent) {
     LinearLayout result = column();
     result.setPadding(dp(16), dp(12), dp(16), dp(16));
-    result.setBackground(surface(Color.WHITE, BORDER));
+    result.setBackground(surface(SURFACE, BORDER));
     LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
     params.bottomMargin = dp(14);
     parent.addView(result, params);
     return result;
+  }
+
+  private TextView hint(LinearLayout parent, String text) {
+    TextView view = label(parent, text);
+    view.setTextSize(12);
+    view.setTextColor(MUTED);
+    view.setPadding(0, dp(2), 0, dp(4));
+    return view;
+  }
+
+  private LinearLayout field(LinearLayout parent, String title) {
+    LinearLayout field = column();
+    field.setPadding(dp(2), 0, dp(2), 0);
+    parent.addView(
+        field,
+        parent.getOrientation() == LinearLayout.HORIZONTAL
+            ? new LinearLayout.LayoutParams(0, -2, 1)
+            : new LinearLayout.LayoutParams(-1, -2));
+    hint(field, title);
+    return field;
   }
 
   private TextView metric(LinearLayout parent, String name) {
@@ -416,15 +610,22 @@ public final class MainActivity extends Activity {
   }
 
   private void primary(Button view) {
-    view.setTextColor(ColorStateList.valueOf(Color.WHITE));
-    view.setBackground(
-        new RippleDrawable(ColorStateList.valueOf(0xff52775f), surface(GREEN, 0), null));
+    view.setTextColor(
+        new ColorStateList(
+            new int[][] {new int[] {-android.R.attr.state_enabled}, new int[] {}},
+            new int[] {MUTED, ON_PRIMARY}));
+    android.graphics.drawable.StateListDrawable background =
+        new android.graphics.drawable.StateListDrawable();
+    background.addState(new int[] {-android.R.attr.state_enabled}, surface(TINT, BORDER));
+    background.addState(
+        new int[] {}, new RippleDrawable(ColorStateList.valueOf(TINT), surface(GREEN, 0), null));
+    view.setBackground(background);
   }
 
   private void styleMediaDialog(Dialog dialog) {
     Window window = dialog.getWindow();
     if (window == null) return;
-    window.setBackgroundDrawableResource(R.color.canvas);
+    window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(CANVAS));
     window
         .getDecorView()
         .setOnApplyWindowInsetsListener(
@@ -485,7 +686,7 @@ public final class MainActivity extends Activity {
     view.setMinimumHeight(dp(48));
     view.setPadding(dp(12), dp(10), dp(12), dp(10));
     view.setBackground(
-        new RippleDrawable(ColorStateList.valueOf(TINT), surface(Color.WHITE, BORDER), null));
+        new RippleDrawable(ColorStateList.valueOf(TINT), surface(SURFACE, BORDER), null));
     view.setOnClickListener(ignored -> action.run());
     LinearLayout.LayoutParams params =
         parent.getOrientation() == LinearLayout.HORIZONTAL
@@ -688,6 +889,14 @@ public final class MainActivity extends Activity {
             + " files · "
             + (active ? "Groups may still update while scanning." : "Saved results.");
     for (TextView indicator : reviewProgress) indicator.setText(reviewStatus);
+    scannerNext.setText(
+        active
+            ? "Matches appear while scanning. You can review them now."
+            : store.groupCount("") > 0
+                ? "Matches are ready. Compare files, choose what to keep, then preview cleanup."
+                : status.equals("Completed")
+                    ? "No matches found. Choose another album or start a new scan."
+                    : "Scan first, then compare matches and choose what to keep.");
     batchDelete.setEnabled(!cleanupBusy);
     Set<String> allFiles = new HashSet<>(), selectedFiles = new HashSet<>();
     List<Store.Group> filteredGroups = store.groups(Integer.MAX_VALUE, groupFilter, groupSort);
@@ -696,7 +905,7 @@ public final class MainActivity extends Activity {
         allFiles.add(file.uri);
         if (!store.keep(group, file)) selectedFiles.add(file.uri);
       }
-    reviewSummary.setText(
+    reviewDetails =
         filteredGroups.size()
             + " groups · "
             + selectedFiles.size()
@@ -707,8 +916,14 @@ public final class MainActivity extends Activity {
               case "EXACT_DUPLICATE" -> "Exact duplicates";
               case "SIMILAR_CONTENT" -> "Similar media";
               default -> "All matches";
-            });
+            };
+    updateHeaderSummary();
+    batchDelete.setEnabled(!cleanupBusy && !selectedFiles.isEmpty());
     List<Store.Group> found = store.groups(limit, groupFilter, groupSort);
+    int filteredCount = store.groupCount(groupFilter);
+    moreGroups.setVisibility(found.size() < filteredCount ? View.VISIBLE : View.GONE);
+    reviewStart.setVisibility(!active && store.groupCount("") == 0 ? View.VISIBLE : View.GONE);
+    groupCount.setVisibility(filteredCount > 0 ? View.VISIBLE : View.GONE);
     StringBuilder identity = new StringBuilder();
     for (Store.Group group : found) {
       identity.append(group.id()).append(group.recommended());
@@ -719,14 +934,20 @@ public final class MainActivity extends Activity {
             .append(store.keep(group, file))
             .append(file.warning);
     }
-    identity.append(store.operations().toString()).append(cleanupBusy).append(limit);
+    identity
+        .append(store.operations().toString())
+        .append(cleanupBusy)
+        .append(limit)
+        .append(filteredCount);
     if (stamp.equals(identity.toString())) return;
     stamp = identity.toString();
     emptyGroups.setVisibility(found.isEmpty() ? View.VISIBLE : View.GONE);
     emptyGroups.setText(
         active
             ? "Matches appear as soon as files are compared."
-            : "No matching groups yet. Run a scan to compare accessible media.");
+            : store.groupCount("") > 0
+                ? "No groups match this filter. Choose All matches to see your results."
+                : "No matches yet. Start a scan, then return here to compare files.");
     Set<String> visible = new HashSet<>();
     for (Store.Group group : found) {
       visible.add(group.id());
@@ -759,6 +980,20 @@ public final class MainActivity extends Activity {
     }
     for (int i = 0; i < found.size(); i++) {
       View card = groupCards.get(found.get(i).id());
+      TextView number = card.findViewWithTag("group-position");
+      Store.Group group = found.get(i);
+      String classification =
+          group.classification().equals("EXACT_DUPLICATE") ? "Exact copies" : "Similar media";
+      number.setText(
+          "Group "
+              + (i + 1)
+              + " of "
+              + filteredCount
+              + " · "
+              + classification
+              + " · "
+              + group.files().size()
+              + " files");
       if (groups.indexOfChild(card) != i) {
         groups.removeView(card);
         groups.addView(card, i);
@@ -784,7 +1019,10 @@ public final class MainActivity extends Activity {
   }
 
   private void styleFile(LinearLayout item, boolean keep) {
-    item.setBackground(surface(keep ? 0xffe6f2e8 : 0xffffe5e2, keep ? 0xff9abb9f : 0xffd99c96));
+    item.setBackground(
+        surface(
+            darkMode ? (keep ? 0xff203c2a : 0xff482725) : (keep ? 0xffe6f2e8 : 0xffffe5e2),
+            darkMode ? (keep ? 0xff547d5f : 0xffa56c65) : (keep ? 0xff9abb9f : 0xffd99c96)));
   }
 
   private void layoutGroups() {
@@ -792,8 +1030,8 @@ public final class MainActivity extends Activity {
     if (width <= 0 || (width == lastGridWidth && groups.getChildCount() == lastGridCount)) return;
     lastGridWidth = width;
     lastGridCount = groups.getChildCount();
-    int minimum = dp(new int[] {360, 300, 250}[compactLevel]);
-    int columns = Math.max(1, Math.min(3, width / minimum));
+    // Groups form full-width rows. Only the files within each group use columns.
+    int columns = 1;
     groups.setColumnCount(Math.max(columns, groups.getColumnCount()));
     for (int i = 0; i < groups.getChildCount(); i++) {
       GridLayout.LayoutParams params =
@@ -833,7 +1071,7 @@ public final class MainActivity extends Activity {
     ImageView view = new ImageView(this);
     view.setContentDescription("Thumbnail of " + file.name);
     view.setScaleType(ImageView.ScaleType.FIT_CENTER);
-    view.setBackgroundColor(0xffedf2e9);
+    view.setBackgroundColor(TINT);
     parent.addView(
         view, new LinearLayout.LayoutParams(-1, dp(new int[] {180, 128, 88}[compactLevel])));
     view.setOnClickListener(ignored -> open.run());
@@ -863,32 +1101,32 @@ public final class MainActivity extends Activity {
   private LinearLayout renderGroup(Store.Group group) {
     LinearLayout card = column();
     card.setPadding(dp(12), dp(12), dp(12), dp(12));
-    card.setBackground(surface(Color.WHITE, BORDER));
+    card.setBackground(surface(SURFACE, BORDER));
     GridLayout.LayoutParams cardParams = new GridLayout.LayoutParams();
     cardParams.width = -1;
     cardParams.height = -2;
     card.setLayoutParams(cardParams);
-    heading(
-        card,
-        (group.classification().equals("EXACT_DUPLICATE") ? "Exact copies" : "Similar media")
-            + " · "
-            + group.files().size()
-            + " files",
-        18);
-    label(
-        card,
-        group.classification().equals("EXACT_DUPLICATE")
-            ? "Identical file contents. Review the suggested keeper before deleting copies."
-            : "Similar appearance. Compare full photos and videos before choosing what to delete;"
-                + " moments and audio may differ.");
-    if (group.files().stream().filter(m -> m.kind.equals("video")).count() >= 2)
-      button(card, "Compare similar videos", () -> compare(group.id()));
-    LinearLayout members = column();
-    card.addView(members);
+    TextView number = hint(card, "");
+    number.setTag("group-position");
+    number.setTypeface(null, Typeface.BOLD);
+    number.setTextSize(14);
+    number.setTextColor(INK);
+    GridLayout members = new GridLayout(this);
+    members.setColumnCount(1);
+    members.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> layoutMembers(members));
+    card.addView(members, new LinearLayout.LayoutParams(-1, -2));
     renderMembers(members, group, expandedGroups.contains(group.id()) ? 50 : 4);
+    LinearLayout footer = column();
+    footer.setPadding(0, dp(4), 0, 0);
+    View divider = new View(this);
+    divider.setBackgroundColor(BORDER);
+    footer.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+    card.addView(footer);
+    if (group.files().stream().filter(m -> m.kind.equals("video")).count() >= 2)
+      button(footer, "Compare similar videos", () -> compare(group.id()));
     if (group.files().size() > 4)
       button(
-          card,
+          footer,
           "Show all " + group.files().size() + " files",
           () -> {
             expandedGroups.add(group.id());
@@ -896,32 +1134,25 @@ public final class MainActivity extends Activity {
             renderMembers(members, group, Math.min(group.files().size(), 50));
             if (group.files().size() > 50)
               label(
-                  members,
+                  card,
                   "Showing first 50 files. Video comparison pages through the full video group.");
           });
-    label(card, "Group " + group.id());
-    Button approve =
-        button(
-            card,
-            "Mark selections reviewed for batch deletion",
-            () -> {
-              try {
-                store.approve(group.id());
-                stamp = "";
-                refresh();
-                message("Selections reviewed. Included in batch cleanup for this filter.");
-              } catch (Exception failure) {
-                message(failure.getMessage());
-              }
-            });
-    approve.setEnabled(!cleanupBusy);
+    long selected = group.files().stream().filter(file -> !store.keep(group, file)).count();
+    TextView groupLabel =
+        hint(footer, selected + " selected · " + (group.files().size() - selected) + " kept");
+    groupLabel.setContentDescription("Group " + group.id());
+    boolean allSelected =
+        !group.files().isEmpty()
+            && group.files().stream().allMatch(file -> !store.keep(group, file));
+    LinearLayout actions = row();
+    footer.addView(actions);
     Button selectAll =
         button(
-            card,
-            "Select all for deletion (keep none)",
+            actions,
+            allSelected ? "Unselect all for deletion" : "Select all for deletion",
             () -> {
               try {
-                store.selectAll(group.id());
+                store.toggleSelectAll(group.id());
                 stamp = "";
                 refresh();
               } catch (Exception failure) {
@@ -929,11 +1160,8 @@ public final class MainActivity extends Activity {
               }
             });
     selectAll.setEnabled(!cleanupBusy);
-    if (group.classification().equals("EXACT_DUPLICATE")) {
-      label(card, "Keep one copy, or use Select all for deletion to keep none.");
-    }
-    long selected = group.files().stream().filter(file -> !store.keep(group, file)).count();
-    Button delete = button(card, "Delete selected (" + selected + ")", () -> preview(group.id()));
+    Button delete =
+        button(actions, "Delete selected (" + selected + ")", () -> preview(group.id()));
     delete.setContentDescription(
         (group.files().stream().allMatch(file -> file.kind.equals("video"))
                 ? "Delete selected videos ("
@@ -941,20 +1169,56 @@ public final class MainActivity extends Activity {
             + selected
             + ")");
     delete.setEnabled(selected > 0 && !cleanupBusy);
+    if (group.classification().equals("EXACT_DUPLICATE"))
+      hint(footer, "Exact copies · Select all includes the last copy.");
+    else hint(footer, "Similar media · Check full previews before deleting.");
     return card;
   }
 
-  private void renderMembers(LinearLayout parent, Store.Group group, int count) {
+  private void renderMembers(GridLayout parent, Store.Group group, int count) {
     for (Media file : group.files().subList(0, Math.min(count, group.files().size()))) {
-      LinearLayout item = card(parent);
+      LinearLayout item = column();
+      parent.addView(item, new GridLayout.LayoutParams());
       styleFile(item, store.keep(group, file));
-      selection(item, group, file);
-      label(item, store.keep(group, file) ? "Keep" : "Delete selected");
       thumbnail(item, file, () -> open(group.id(), file.uri));
-      label(item, file.name + " · " + String.format(Locale.ROOT, "%.1f MB", file.size / 1048576.0));
+      TextView name = label(item, file.name);
+      name.setTextSize(12);
+      name.setMaxLines(2);
+      name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      name.setContentDescription(file.name);
+      hint(item, String.format(Locale.ROOT, "%.1f MB", file.size / 1048576.0));
+      CheckBox choice = selection(item, group, file);
+      choice.setContentDescription("Select " + file.name + " for deletion");
+      choice.setText("Select for deletion");
+      choice.setTextSize(12);
+      choice.setMinHeight(dp(48));
       if (!file.warning.isEmpty()) label(item, file.warning);
       if (!file.protection.isEmpty()) label(item, file.protection);
     }
+    parent.setTag(null);
+    layoutMembers(parent);
+  }
+
+  private void layoutMembers(GridLayout members) {
+    int width = members.getWidth();
+    int count = members.getChildCount();
+    if (width <= 0 || count == 0) return;
+    String signature = width + ":" + count + ":" + compactLevel;
+    if (signature.equals(members.getTag())) return;
+    members.setTag(signature);
+    int minimum = dp(new int[] {220, 164, 144}[compactLevel]);
+    int columns = Math.max(1, Math.min(Math.min(4, count), width / minimum));
+    members.setColumnCount(Math.max(columns, members.getColumnCount()));
+    for (int i = 0; i < count; i++) {
+      GridLayout.LayoutParams params =
+          new GridLayout.LayoutParams(
+              GridLayout.spec(i / columns, GridLayout.TOP), GridLayout.spec(i % columns));
+      params.width = width / columns - dp(8);
+      params.height = -2;
+      params.setMargins(dp(4), dp(4), dp(4), dp(8));
+      members.getChildAt(i).setLayoutParams(params);
+    }
+    members.setColumnCount(columns);
   }
 
   private void open(String groupId, String initialUri) {
