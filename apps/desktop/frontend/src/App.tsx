@@ -175,7 +175,7 @@ export function App() {
       <main className="connect-screen">
         <div className="connect-card">
           <Leaf size={38} />
-          <div className="eyebrow">LOCAL BY DEFAULT</div>
+          <div className="eyebrow">Local by default</div>
           <h1>Media Cleaner</h1>
           <p>
             Connect to your local library workspace using the launch link or
@@ -298,10 +298,10 @@ export function App() {
                   <Leaf size={23} />
                 </span>
                 <span>
-                  Media Cleaner<small>A LITTLE LESS CLUTTER</small>
+                  Media Cleaner<small>A little less clutter</small>
                 </span>
               </a>
-              <div className="nav-label">WORKSPACE</div>
+              <div className="nav-label">Workspace</div>
               <nav aria-label="Main navigation">
                 {pages.map(([name, Icon]) => (
                   <button
@@ -333,7 +333,7 @@ export function App() {
                   </span>
                 </div>
                 <div className="sidebar-footer">
-                  PHASE 3 <span>v0.1.0</span>
+                  Phase 3 <span>v0.1.0</span>
                 </div>
                 <ShutdownControl
                   onStopped={() => {

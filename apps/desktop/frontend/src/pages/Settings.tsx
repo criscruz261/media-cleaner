@@ -33,7 +33,7 @@ export function Settings() {
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">SET UP YOUR WORKSPACE</div>
+          <div className="eyebrow">SET UP YOUR Workspace</div>
           <h1>Thoughtful defaults.</h1>
           <p>Local preferences, stored on this computer.</p>
         </div>

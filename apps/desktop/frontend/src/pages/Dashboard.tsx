@@ -2,7 +2,7 @@ import { useState } from "react";
 import { saveLocal } from "../services/workspace";
 import { useQuery } from "@tanstack/react-query";
 import { Files, HardDrive, Layers3, ArrowUpRight, Clock3 } from "lucide-react";
-import { api, bytes } from "../services/api";
+import { api, bytes, displayLabel } from "../services/api";
 import { Empty, ErrorMessage, Loading } from "../components/ui";
 import type { Scan, Page, Cleanup } from "../types/api";
 export function Dashboard({
@@ -173,7 +173,9 @@ export function Dashboard({
                       {scan.cache_hits} cached
                     </small>
                   </div>
-                  <span className={`badge ${scan.status}`}>{scan.status}</span>
+                  <span className={`badge ${scan.status}`}>
+                    {displayLabel(scan.status)}
+                  </span>
                   <ArrowUpRight size={16} />
                 </button>
               ))}
@@ -210,7 +212,7 @@ export function Dashboard({
                   </strong>
                   <small>{new Date(item.created_at).toLocaleString()}</small>
                 </div>
-                <span className="badge">{item.status}</span>
+                <span className="badge">{displayLabel(item.status)}</span>
               </div>
             ))
           ) : (

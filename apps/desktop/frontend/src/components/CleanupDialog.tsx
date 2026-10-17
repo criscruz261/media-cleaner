@@ -1,3 +1,4 @@
+import { displayLabel } from "../services/api";
 import { usePopupKeyboard } from "./usePopupKeyboard";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -83,7 +84,7 @@ export function CleanupDialog({
             </h2>
             {result.items.map((item) => (
               <p key={item.file_id}>
-                {item.source} · {item.status}
+                {item.source} · {displayLabel(item.status)}
                 {item.error && <span className="error"> · {item.error}</span>}
               </p>
             ))}

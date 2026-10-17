@@ -6,7 +6,7 @@ import { VideoCompare } from "../components/VideoCompare";
 import { useState, useEffect, useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldCheck, ArrowRight, Layers3 } from "lucide-react";
-import { api, bytes } from "../services/api";
+import { api, bytes, displayLabel } from "../services/api";
 import type { Scan, Page, Group, Cleanup, Settings } from "../types/api";
 import { Empty, ErrorMessage, Loading, Pagination } from "../components/ui";
 import { MediaPreview } from "../components/MediaPreview";
@@ -44,7 +44,7 @@ export function Review({
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">LESS GUESSWORK, MORE CONTROL</div>
+          <div className="eyebrow">Less guesswork, more control</div>
           <h1>Review the repeats.</h1>
           <p>Exact copies and similar media. You decide what stays.</p>
         </div>
@@ -59,7 +59,8 @@ export function Review({
           <option value="">Choose a scan</option>
           {scans.data?.items.map((scan) => (
             <option value={scan.id} key={scan.id}>
-              {new Date(scan.created_at).toLocaleString()} · {scan.status}
+              {new Date(scan.created_at).toLocaleString()} ·{" "}
+              {displayLabel(scan.status)}
             </option>
           ))}
         </select>
@@ -220,8 +221,8 @@ export function GroupCard({
           </h2>
           <span className="badge exact">
             {group.classification === "EXACT_DUPLICATE"
-              ? "EXACT DUPLICATE"
-              : "SIMILAR MEDIA · REVIEW REQUIRED"}
+              ? "Exact duplicate"
+              : "Similar media · review required"}
           </span>
         </div>
         <strong>{bytes(group.recoverable)} potential</strong>
@@ -341,7 +342,7 @@ export function GroupCard({
                 </p>
               )}
               {file.status !== "ready" && (
-                <p className="muted">{file.status}</p>
+                <p className="muted">{displayLabel(file.status)}</p>
               )}
               {file.warnings.map((warning) => (
                 <p className="hint" key={warning}>

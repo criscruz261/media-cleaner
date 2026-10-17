@@ -17,7 +17,7 @@ import {
   ArrowRight,
   ShieldCheck,
 } from "lucide-react";
-import { api, bytes } from "../services/api";
+import { api, bytes, displayLabel } from "../services/api";
 import { useScanProgress } from "../hooks/useScanProgress";
 import { LiveMatches } from "../components/LiveMatches";
 import { loadDraft, saveLocal, draftKey } from "../services/workspace";
@@ -290,9 +290,9 @@ export function Scanner({
                 />
                 Show processing thumbnails
               </label>
-              <span className="badge">{scan.data.status}</span>
+              <span className="badge">{displayLabel(scan.data.status)}</span>
             </div>
-            <p>{scan.data.stage.replaceAll("_", " ")}</p>
+            <p>{displayLabel(scan.data.stage)}</p>
             {showThumbnails && !!scan.data.activity?.length && (
               <ActivityThumbnails activity={scan.data.activity} />
             )}
@@ -375,7 +375,7 @@ export function Scanner({
                 {scan.data.activity?.map((item) => (
                   <div key={item.path}>
                     <p className="file-path">
-                      <strong>{item.phase}</strong> · {item.path}
+                      <strong>{displayLabel(item.phase)}</strong> · {item.path}
                     </p>
                     {item.phase === "hashing" ? (
                       <>

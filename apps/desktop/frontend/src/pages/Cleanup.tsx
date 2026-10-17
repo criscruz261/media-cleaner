@@ -3,7 +3,7 @@ import { CleanupComparison } from "../components/CleanupComparison";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, Undo2, ArrowRight } from "lucide-react";
-import { api, bytes } from "../services/api";
+import { api, bytes, displayLabel } from "../services/api";
 import type { Cleanup as CleanupPlan, Page } from "../types/api";
 import { Empty, ErrorMessage, Pagination } from "../components/ui";
 export function Cleanup({
@@ -50,7 +50,7 @@ export function Cleanup({
       {!embedded && (
         <div className="page-heading">
           <div>
-            <div className="eyebrow">A SECOND LOOK, BEFORE YOU CLEAN</div>
+            <div className="eyebrow">A second look, before you clean</div>
             <h1>Make room, safely.</h1>
             <p>Review every move. Keep a recovery record.</p>
           </div>
@@ -130,7 +130,7 @@ export function Cleanup({
       )}
       {!embedded && !plan && (
         <Empty title="Nothing queued for cleanup">
-          Uncheck unwanted files in Duplicate Review, then choose Preview
+          Uncheck unwanted files in Duplicate review, then choose Preview
           cleanup.
         </Empty>
       )}
@@ -146,13 +146,13 @@ export function Cleanup({
               <summary>
                 {new Date(operation.created_at).toLocaleString()} ·{" "}
                 {operation.items.length} files · {operation.destination}{" "}
-                <span className="badge">{operation.status}</span>
+                <span className="badge">{displayLabel(operation.status)}</span>
               </summary>
               {operation.items.map((item) => (
                 <div className="operation-item" key={item.file_id}>
                   <p>{item.source}</p>
                   <small>
-                    {item.status}
+                    {displayLabel(item.status)}
                     {item.quarantine_path
                       ? ` · Recovery: ${item.quarantine_path}`
                       : ""}

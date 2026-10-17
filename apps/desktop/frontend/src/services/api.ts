@@ -22,3 +22,8 @@ export function bytes(value: number): string {
   const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), 4);
   return `${(value / 1024 ** exponent).toFixed(exponent ? 1 : 0)} ${["B", "KB", "MB", "GB", "TB"][exponent]}`;
 }
+
+export function displayLabel(value: string | null | undefined): string {
+  const text = (value ?? "").replaceAll("_", " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

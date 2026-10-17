@@ -34,7 +34,7 @@ export function CleanupComparison({ plan }: { plan: Cleanup }) {
     <div className="cleanup-review-groups" aria-label="Read-only group review">
       <p>
         Read-only preview of this cleanup plan. Cancel to change selections in
-        Duplicate Review.
+        Duplicate review.
       </p>
       {[...groups.entries()].map(([id, items], index) => {
         const snapshot = items.find((item) => item.review_files)?.review_files;
