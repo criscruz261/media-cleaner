@@ -1,5 +1,7 @@
 # Downloaded development tools and Python environments
 /.tools/
+/deployment-package/windows/*
+!/deployment-package/windows/.gitkeep
 .venv/
 .venv-*/
 venv/
