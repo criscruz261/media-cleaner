@@ -229,9 +229,9 @@ header {
   background: #7f9f72;
 }
 .content {
-  max-width: 1250px;
-  margin: auto;
-  padding: 46px 42px 0;
+  max-width: none;
+  margin: 0;
+  padding: 8px 8px 0;
 }
 .page-heading {
   display: flex;
@@ -785,7 +785,7 @@ footer span:last-child {
 }
 @media (min-width: 1500px) {
   .content {
-    padding-top: 60px;
+    padding-top: 8px;
   }
   .page-heading {
     margin-bottom: 42px;
@@ -806,7 +806,7 @@ footer span:last-child {
     margin-left: 205px;
   }
   .content {
-    padding: 30px 25px 0;
+    padding: 8px 8px 0;
   }
   header {
     padding: 0 25px;
@@ -863,7 +863,7 @@ footer span:last-child {
     padding: 0 20px;
   }
   .content {
-    padding: 28px 18px 0;
+    padding: 6px 6px 0;
   }
   .panel {
     padding: 18px;
@@ -2290,4 +2290,17 @@ footer span:last-child {
 #sticky-review-action button {
   padding: 7px 12px;
   font-size: 11px;
+}
+
+.group-position {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+.group-position > span {
+  color: var(--muted);
+  font-size: 10px;
 }

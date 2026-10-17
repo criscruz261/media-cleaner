@@ -89,11 +89,13 @@ export function LiveMatches({
       </div>
       <div className="live-matches-results">
         {matches.data?.items.length ? (
-          matches.data.items.map((group) =>
+          matches.data.items.map((group, index) =>
             onPlan ? (
               <GroupCard
                 key={group.id}
                 group={group}
+                position={offset + index + 1}
+                totalGroups={matches.data.total}
                 onPlan={onPlan}
                 thumbnailFirst
                 selectForDeletion

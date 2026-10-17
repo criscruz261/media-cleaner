@@ -105,10 +105,12 @@ export function Review({
           Try another filter or choose another scan.
         </Empty>
       ) : (
-        groups.data.items.map((group) => (
+        groups.data.items.map((group, index) => (
           <GroupCard
             key={group.id}
             group={group}
+            position={offset + index + 1}
+            totalGroups={groups.data.total}
             onPlan={onPlan}
             thumbnailFirst
           />
@@ -134,12 +136,16 @@ export function GroupCard({
   thumbnailFirst = false,
   selectForDeletion = true,
   live = false,
+  position,
+  totalGroups,
 }: {
   group: Group;
   onPlan: (plan: Cleanup) => void;
   thumbnailFirst?: boolean;
   selectForDeletion?: boolean;
   live?: boolean;
+  position?: number;
+  totalGroups?: number;
 }) {
   const [compact] = useCompactGroups();
   const openPreview = useContext(PreviewContext);
@@ -216,6 +222,12 @@ export function GroupCard({
         />
       )}
       <div className="group-summary">
+        {position !== undefined && totalGroups !== undefined && (
+          <div className="group-position">
+            <strong>Group {position} of {totalGroups}</strong>
+            <span>{Math.max(0, totalGroups - position)} more after this · current filter</span>
+          </div>
+        )}
         <div className="section-heading">
           <div>
             <h2>
