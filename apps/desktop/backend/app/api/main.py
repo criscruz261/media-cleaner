@@ -628,6 +628,31 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             manager.matcher_dirty = True
             return record(result)
 
+    @app.get("/api/v1/cleanup/{operation_id}/progress")
+    def cleanup_progress(operation_id: str):
+        # Reads must not wait for the execution lock held by cleanup.
+        with sessions() as session:
+            operation = session.get(CleanupOperation, operation_id)
+            if not operation:
+                raise HTTPException(404, "Cleanup plan not found")
+            moved = [item for item in operation.items if item["status"] == "moved"]
+            failed = [item for item in operation.items if item["status"] == "failed"]
+            current = next((item for item in operation.items if item["status"] == "moving"), None)
+            if current is None and operation.status == "executing":
+                current = next((item for item in operation.items if item["status"] == "planned"), None)
+            return {
+                "id": operation.id,
+                "status": operation.status,
+                "total": len(operation.items),
+                "processed": len(moved) + len(failed),
+                "moved": len(moved),
+                "failed": len(failed),
+                "moved_bytes": sum(item["size"] for item in moved),
+                "total_bytes": operation.total_bytes,
+                "current_file": current["source"] if current else None,
+                "current_action": "moving" if current and current["status"] == "moving" else "checking" if current else None,
+            }
+
     @app.get("/api/v1/cleanup/history")
     def cleanup_history(offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
         with sessions() as session:

@@ -1,3 +1,4 @@
+import { CleanupProgress } from "../components/CleanupProgress";
 import { CleanupComparison } from "../components/CleanupComparison";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -41,6 +42,9 @@ export function Cleanup({
       api(`/cleanup/${id}/restore`, { confirmed: true }),
     onSuccess: () => client.invalidateQueries(),
   });
+  if (execute.isPending && plan) {
+    return <CleanupProgress planId={plan.id} total={plan.items.length} />;
+  }
   return (
     <>
       {!embedded && (

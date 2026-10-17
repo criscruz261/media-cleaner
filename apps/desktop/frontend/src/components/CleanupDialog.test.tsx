@@ -51,3 +51,63 @@ it("confirms and executes in a pop-up, reports failures, and keeps the results p
     vi.unstubAllGlobals();
   }
 });
+
+it("shows live progress after confirmation until cleanup completes", async () => {
+  const plan = {
+    id: "progress-plan",
+    token: "token",
+    status: "planned",
+    destination: "trash",
+    total_bytes: 20,
+    expires_at: "2026-10-17T12:00:00Z",
+    items: [
+      { file_id: "one", source: "/one.jpg", keeper: null, size: 10 },
+      { file_id: "two", source: "/two.jpg", keeper: null, size: 10 },
+    ],
+  } as Cleanup;
+  let finish!: (value: unknown) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.endsWith("/execute"))
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      return {
+        ok: true,
+        json: async () => ({
+          status: "executing",
+          total: 2,
+          processed: 1,
+          moved: 1,
+          failed: 0,
+          moved_bytes: 10,
+          total_bytes: 20,
+          current_file: "/two.jpg",
+          current_action: "moving",
+        }),
+      };
+    }),
+  );
+  try {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CleanupDialog plan={plan} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm cleanup" }));
+    await screen.findByText("1 / 2 files processed");
+    expect(
+      screen.getByRole("progressbar", { name: "Deletion progress" }),
+    ).toHaveAttribute("value", "1");
+    expect(screen.getByText("Moving: /two.jpg")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm cleanup" }),
+    ).not.toBeInTheDocument();
+    finish({ ok: true, json: async () => ({ ...plan, status: "completed" }) });
+    await screen.findByText("Cleanup completed");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

@@ -1228,3 +1228,10 @@ footer span:last-child {
 .pagination-jump input {
   width: 85px;
 }
+
+.cleanup-progress progress {
+  width: 100%;
+}
+.cleanup-current-file {
+  overflow-wrap: anywhere;
+}

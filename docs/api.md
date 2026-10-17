@@ -27,6 +27,7 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | GET /groups/{id} | Paginated current members and saved keep choices |
 | POST /groups/{id}/review | Set `keep_ids` or partial `changes:{file_id:boolean}`; empty `keep_ids:[]` selects the entire group for deletion; protected assets must stay kept |
 | POST /cleanup/plan | Dry run for `file_ids`, `group_id` (required for approximate groups), destination `trash` or `quarantine` |
+| GET /cleanup/{id}/progress | Live persisted cleanup status, processed/moved/failed counts, bytes moved and current file; readable during execution |
 | POST /cleanup/execute | `plan_id`, matching plan `token`, `confirmed:true` |
 | GET /cleanup/history | Paginated plans, outcomes and recovery records |
 | POST /cleanup/{id}/restore | `confirmed:true`; quarantine recovery only |
@@ -59,3 +60,5 @@ Group-specific review and cleanup validation errors include the persistent group
 The batch action is labeled “Review exact duplicate groups”, “Review similar media groups”, or “Review selected groups” according to the active filter. It opens confirmation rather than executing deletion. The review scope is also displayed in that window and comes from the actual plan items.
 
 Explicit “Select all for deletion” authorization survives live group rebuilds and scan resume for the previously selected members. It remains valid for per-group and filtered batch cleanup, including the final pre-move checks. Newly discovered files are not automatically authorized for removal.
+
+After confirmation, the desktop review window shows validation followed by deletion progress, polling `GET /cleanup/{id}/progress` every 400 ms while execution is pending. `processed` includes moved and failed files; validation is indeterminate until whole-plan checks finish. Progress reads do not take the cleanup execution lock. The final response displays completed/partial results and individual errors.

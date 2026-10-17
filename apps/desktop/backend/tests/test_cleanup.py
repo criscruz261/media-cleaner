@@ -366,3 +366,57 @@ def test_cleanup_snapshots_all_group_members_including_multiple_kept_files(clien
     assert item["file_id"] == files[2]["id"]
     assert {file["id"] for file in item["review_files"]} == {file["id"] for file in files}
     assert {file["path"] for file in item["review_files"]} == {file["path"] for file in files}
+
+
+def test_cleanup_progress_is_readable_during_execution_and_tracks_failures(client, workspace, monkeypatch):
+    from conftest import scan
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    for name in ["a.MOV", "b.MOV", "c.MOV"]:
+        (workspace / name).write_bytes(b"same contents")
+    job = scan(client, [workspace])
+    plan = client.post("/api/v1/cleanup/plan-selected", json={"scan_id": job["id"]}).json()
+    moving = [Event(), Event()]
+    release = [Event(), Event()]
+    calls = []
+
+    def controlled_move(path):
+        index = len(calls)
+        calls.append(path)
+        moving[index].set()
+        assert release[index].wait(5), "Test did not release the move"
+        if index == 1:
+            raise OSError("Synthetic Trash failure")
+        Path(path).unlink()
+
+    monkeypatch.setattr("app.cleanup.service.send2trash", controlled_move)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(execute, client, plan)
+        try:
+            assert moving[0].wait(5)
+            url = f"/api/v1/cleanup/{plan['id']}/progress"
+            progress = client.get(url).json()
+            assert progress["status"] == "executing"
+            assert progress["processed"] == 0
+            assert progress["total"] == 2
+            assert progress["current_file"] == calls[0]
+            assert progress["current_action"] == "moving"
+            release[0].set()
+            assert moving[1].wait(5)
+            progress = client.get(url).json()
+            assert progress["processed"] == 1
+            assert progress["moved"] == 1
+            assert progress["failed"] == 0
+            assert progress["current_file"] == calls[1]
+        finally:
+            for event in release:
+                event.set()
+        outcome = future.result(timeout=5)
+    assert outcome.json()["status"] == "partial"
+    progress = client.get(url).json()
+    assert progress["processed"] == 2
+    assert progress["moved"] == 1
+    assert progress["failed"] == 1
+    assert progress["current_file"] is None
+    assert client.get("/api/v1/cleanup/missing/progress").status_code == 404
