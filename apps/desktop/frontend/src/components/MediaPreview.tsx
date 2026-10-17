@@ -29,8 +29,8 @@ export function MediaPreview({
         ) : file.media_type === "video" && thumbnailFirst && !playing ? (
           <button
             className="image-button video-thumbnail"
-            aria-label={`Play ${file.name}`}
-            onClick={() => setPlaying(true)}
+            aria-label={`${onOpen ? "Preview" : "Play"} ${file.name}`}
+            onClick={() => (onOpen ? onOpen() : setPlaying(true))}
           >
             {thumbnailFailed ? (
               <span>Thumbnail unavailable · Play video</span>
@@ -71,11 +71,7 @@ export function MediaPreview({
           </button>
         )}
       </div>
-      {onOpen ? (
-        <button className="small-link" onClick={onOpen}>
-          Open group preview
-        </button>
-      ) : (
+      {!onOpen && (
         <a className="small-link" href={url} target="_blank" rel="noreferrer">
           Open preview <ExternalLink size={12} />
         </a>

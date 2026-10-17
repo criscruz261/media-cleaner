@@ -1854,12 +1854,12 @@ footer span:last-child {
   padding: 10px;
 }
 .group-card .media-card.kept {
-  background: #f4f9f4;
-  border-color: #acc9b1;
+  background: #e3f4e6;
+  border-color: #83b58e;
 }
 .group-card .media-card:not(.kept) {
-  background: #fff5f3;
-  border-color: #e2aaa2;
+  background: #ffb6ae;
+  border-color: #c7372b;
 }
 .group-card .media-card > .checkbox-label {
   font-size: 11px;
@@ -1943,4 +1943,54 @@ footer span:last-child {
   .group-actionbar .group-actions .primary {
     margin-left: 0;
   }
+}
+
+.group-card .media-card.kept {
+  color: #143d22;
+}
+.group-card .media-card:not(.kept) {
+  color: #58170f;
+}
+.group-card .media-card .file-path,
+.group-card .media-card .file-meta,
+.group-card .media-card .hint,
+.group-card .media-card .muted,
+.group-card .media-card .protected,
+.group-card .media-card .small-link {
+  color: inherit;
+}
+.group-card .media-card .filename,
+.group-card .media-card > .checkbox-label {
+  color: inherit;
+  font-weight: 650;
+}
+
+.group-summary {
+  padding: 8px 10px;
+}
+.group-summary > .section-heading {
+  margin-bottom: 4px;
+  gap: 6px 10px;
+}
+.group-summary > .section-heading > div {
+  gap: 6px 10px;
+}
+.group-summary h2 {
+  font-size: 14px;
+}
+.group-summary-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.group-summary-meta .group-identifier {
+  flex: 1;
+  margin: 0;
+}
+.group-summary-meta .evidence {
+  margin: 0;
+}
+.group-summary-meta .evidence[open] {
+  flex-basis: 100%;
 }

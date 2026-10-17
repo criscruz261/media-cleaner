@@ -223,56 +223,58 @@ export function GroupCard({
           </div>
           <strong>{bytes(group.recoverable)} potential</strong>
         </div>
-        <p className="hint group-identifier">Group {group.id}</p>
-        <p className="recommendation">{group.recommendation}</p>
-        <details className="evidence">
-          <summary>
-            Matching evidence ·{" "}
-            {group.classification === "EXACT_DUPLICATE"
-              ? "SHA-256"
-              : group.evidence.media_kind === "sequence"
-                ? "time-spaced frames"
-                : "pHash + dHash"}
-          </summary>
-          {group.classification === "EXACT_DUPLICATE" ? (
-            <>
-              <code>{group.evidence.sha256}</code>
-              <p>
-                Same file size and complete SHA-256 digest. Algorithm:{" "}
-                {group.evidence.algorithm}.
-              </p>
-            </>
-          ) : group.evidence.media_kind === "sequence" ? (
-            <>
-              <p>
-                At least {group.evidence.minimum_matched_samples} of{" "}
-                {group.evidence.sample_count} time-spaced visual samples match
-                for each pair. Maximum duration difference:{" "}
-                {group.evidence.max_duration_difference_seconds?.toFixed(3)}{" "}
-                seconds.
-              </p>
-              <p>
-                Frame pHash limit: {group.evidence.phash_limit}/64; dHash limit:{" "}
-                {group.evidence.dhash_limit}/64. Every group pair qualifies.{" "}
-                {group.evidence.note}
-              </p>
-            </>
-          ) : (
-            <>
-              <p>
-                Maximum pairwise pHash distance:{" "}
-                {group.evidence.max_phash_distance}/64 (limit{" "}
-                {group.evidence.phash_limit}). Maximum dHash distance:{" "}
-                {group.evidence.max_dhash_distance}/64 (limit{" "}
-                {group.evidence.dhash_limit}).
-              </p>
-              <p>
-                Every member passes both thresholds against every other member,
-                with aspect and color checks. {group.evidence.note}
-              </p>
-            </>
-          )}
-        </details>
+        <div className="group-summary-meta">
+          <p className="hint group-identifier">Group {group.id}</p>
+          <details className="evidence">
+            <summary>
+              Matching evidence ·{" "}
+              {group.classification === "EXACT_DUPLICATE"
+                ? "SHA-256"
+                : group.evidence.media_kind === "sequence"
+                  ? "time-spaced frames"
+                  : "pHash + dHash"}
+            </summary>
+            <p className="recommendation">{group.recommendation}</p>
+            {group.classification === "EXACT_DUPLICATE" ? (
+              <>
+                <code>{group.evidence.sha256}</code>
+                <p>
+                  Same file size and complete SHA-256 digest. Algorithm:{" "}
+                  {group.evidence.algorithm}.
+                </p>
+              </>
+            ) : group.evidence.media_kind === "sequence" ? (
+              <>
+                <p>
+                  At least {group.evidence.minimum_matched_samples} of{" "}
+                  {group.evidence.sample_count} time-spaced visual samples match
+                  for each pair. Maximum duration difference:{" "}
+                  {group.evidence.max_duration_difference_seconds?.toFixed(3)}{" "}
+                  seconds.
+                </p>
+                <p>
+                  Frame pHash limit: {group.evidence.phash_limit}/64; dHash
+                  limit: {group.evidence.dhash_limit}/64. Every group pair
+                  qualifies. {group.evidence.note}
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  Maximum pairwise pHash distance:{" "}
+                  {group.evidence.max_phash_distance}/64 (limit{" "}
+                  {group.evidence.phash_limit}). Maximum dHash distance:{" "}
+                  {group.evidence.max_dhash_distance}/64 (limit{" "}
+                  {group.evidence.dhash_limit}).
+                </p>
+                <p>
+                  Every member passes both thresholds against every other
+                  member, with aspect and color checks. {group.evidence.note}
+                </p>
+              </>
+            )}
+          </details>
+        </div>
       </div>
       {detail.isPending ? (
         <Loading />
