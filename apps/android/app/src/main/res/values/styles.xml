@@ -1,1 +1,23 @@
-<resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#315F48</item><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">#F7F8F5</item><item name="android:navigationBarColor">#F7F8F5</item><item name="android:windowActionModeOverlay">true</item></style></resources>
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#315F48</item>
+        <item name="android:colorControlNormal">#69786D</item>
+        <item name="android:textColorPrimary">#233C32</item>
+        <item name="android:textColorSecondary">#69786D</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F7F8F5</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">@color/canvas</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:alertDialogTheme">@style/CleanerDialog</item>
+    </style>
+    <style name="CleanerDialog" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">#315F48</item>
+        <item name="android:textColorPrimary">#233C32</item>
+        <item name="android:textColorSecondary">#69786D</item>
+        <item name="android:windowBackground">@drawable/dialog_surface</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+</resources>

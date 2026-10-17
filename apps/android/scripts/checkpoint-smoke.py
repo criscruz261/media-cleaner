@@ -44,7 +44,7 @@ def find(text, timeout=40, button=False):
         if current == previous:
             direction *= -1
         previous = current
-        start, end = ("1950", "650") if direction == 1 else ("650", "1950")
+        start, end = ("1950", "950") if direction == 1 else ("950", "1950")
         adb("shell", "input", "swipe", "550", start, "550", end, "350")
     raise AssertionError("Missing fixture control: " + text)
 
@@ -55,6 +55,7 @@ def tap(node):
 
 
 def close_at_checkpoint():
+    tap(find("Settings", button=True))
     tap(find("Save checkpoint and close", button=True))
     tap(find("Save and close", button=True))
     deadline = time.monotonic() + 30
@@ -73,6 +74,7 @@ assert adb("emu", "avd", "name").splitlines()[0] == "media-cleaner-test", (
 )
 close_at_checkpoint()
 adb("shell", "am", "start", "-n", PACKAGE + "/.MainActivity")
+tap(find("Scanner", button=True))
 tap(find("Resume", button=True))
 find("Scan complete.", timeout=90)
 close_at_checkpoint()

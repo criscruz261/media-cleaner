@@ -2,6 +2,23 @@
 
 A standalone, offline native Android app for Android 11+ (API 30+). It does not require the desktop server, Python on the phone, or an account. The app requests photo/video access through Android permissions and scans only the media Android grants access to, including selected-only access on Android 14+.
 
+## Interface
+
+The phone app follows the desktop's five sections using bottom navigation:
+**Dashboard**, **Scanner**, **Review**, **Cleanup**, and **Settings**. The green
+and cream palette, bordered cards, buttons, preview controls, and cleanup dialogs
+follow the desktop style with touch-sized controls. Scan progress stays visible
+across sections and inside media previews. Switching sections preserves review
+selections, filters, expanded groups, and each section's scroll position.
+
+Dashboard shows the latest scan's file count, exact and similar group counts,
+and shortcuts. Scanner handles album selection and checkpoints; Review contains
+live matches, filters, comparisons and batch cleanup. Cleanup contains operation
+history and restore actions. Settings provides Android media permissions,
+storage/privacy information, and checkpoint-and-close. Android continues to
+control media permissions and the final Trash/restore confirmation. This shares
+the desktop's organization while showing only features available on Android.
+
 ## Use
 
 1. Install the debug APK from `app/build/outputs/apk/debug/app-debug.apk` on your Android phone (transfer the file and open it; Android may ask you to allow installation from that file manager).
@@ -92,7 +109,7 @@ Large groups are limited in visible UI, and comparison uses four players per pag
 
 ## Verification
 
-`build.sh` runs pure Java matching tests, APK compilation and Android lint. Current delivery validation: 5 matching tests passed; Android lint has no errors (13 English-string localization warnings); the Android 15/API 35 ARM64 emulator completed the synthetic gallery, checkpoint reuse, keep-none preview, cancelled preview, confirmed Trash and restore flow. The debug APK signature was verified. The synthetic-only emulator script refuses physical devices and any AVD name other than `media-cleaner-test`; it clears only this app's test data and uses generated gallery media. It verifies actual photo/video matching, checkpoint reuse, comparison selection, keep-none selection, changed-file protection, app confirmation, Android Trash and restore. It requires the repository's desktop Python test environment only for generating synthetic images/videos.
+`build.sh` runs pure Java matching tests, APK compilation and Android lint. Current delivery validation: 5 matching tests passed; Android lint has no errors (localization and backup-rule warnings remain); the Android 15/API 35 ARM64 emulator completed the synthetic gallery, checkpoint reuse, keep-none preview, cancelled preview, confirmed Trash and restore flow. The debug APK signature was verified. The desktop-style UI was checked across all five sections, media preview and video comparison, batch cleanup confirmation, Android Trash/restore, and checkpoint close/reopen/resume. The synthetic-only emulator script refuses physical devices and any AVD name other than `media-cleaner-test`; it clears only this app's test data and uses generated gallery media. It verifies actual photo/video matching, checkpoint reuse, comparison selection, keep-none selection, changed-file protection, app confirmation, Android Trash and restore. It requires the repository's desktop Python test environment only for generating synthetic images/videos.
 
 ```sh
 # Start the isolated AVD (separate terminal; waits for boot):

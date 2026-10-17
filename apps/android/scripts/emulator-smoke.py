@@ -65,7 +65,7 @@ def find(text, timeout=15, scroll=False, button=False):
             if current_tree == previous_tree:
                 direction *= -1
             previous_tree = current_tree
-            start, end = ("1950", "650") if direction == 1 else ("650", "1950")
+            start, end = ("1950", "950") if direction == 1 else ("950", "1950")
             adb("shell", "input", "swipe", "550", start, "550", end, "350")
         time.sleep(0.4)
     raise AssertionError(f"Missing UI: {text}")
@@ -100,6 +100,15 @@ def snapshot():
             if not suffix:
                 raise
     return sqlite3.connect(directory / name)
+
+
+def navigate(name):
+    root = tree()
+    tab = next(
+        node for node in root.iter("node")
+        if node.get("text") == name and node.get("class", "").endswith("Button")
+    )
+    tap(tab)
 
 
 def launch(scan=False):
@@ -207,7 +216,14 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     print("Scanning real synthetic photos and videos", flush=True)
     launch(scan=True)
     find("Scan complete.", timeout=180)
-    screenshot("scanner.png")
+    # All five destinations remain reachable without changing the scan results.
+    for page, expected in [("Dashboard", "Library overview"), ("Scanner", "Scan your library"),
+                           ("Review", "Matches found so far"), ("Cleanup", "Cleanup and recovery"),
+                           ("Settings", "Media access")]:
+        navigate(page)
+        find(expected)
+        screenshot(page.lower() + ".png")
+    navigate("Scanner")
     db = snapshot()
     meta = dict(db.execute("SELECT key,value FROM meta"))
     assert meta["status"] == "completed", meta
@@ -239,6 +255,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     db.close()
     print("Checking comparison playback and saved selection", flush=True)
     launch()
+    navigate("Review")
     tap(find("Thumbnail of trip.png", scroll=True, timeout=35))
     find("Close preview")
     find("completed")  # Progress stays visible inside the review dialog.
@@ -279,8 +296,19 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     tap(find("Cancel"))
     # Wait until the cancellation is saved and the underlying group is visible.
     find("Delete selected videos (2)", scroll=True, timeout=35)
+    # A photo can also belong to an exact group. Explicitly authorize keeping
+    # none there before batch-selecting its retained copy through a similar group.
+    db = snapshot()
+    exact_ids = [row[0] for row in db.execute("SELECT id FROM groups WHERE classification='EXACT_DUPLICATE'")]
+    db.close()
+    launch()
+    navigate("Review")
+    for group_id in exact_ids:
+        find("Group " + group_id, scroll=True, timeout=90)
+        tap(find("Select all for deletion (keep none)", scroll=True, timeout=30))
     adb("shell", "am", "force-stop", PACKAGE)
     launch()
+    navigate("Review")
     tap(find("Delete selected across groups", scroll=True, timeout=35))
     # Photo groups may be ordered as exact (two) or similar (three).
     selected_count = int(
@@ -302,6 +330,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
         time.sleep(2)
     screenshot("android-trash-confirmation.png")
     tap(find("Allow", timeout=20, button=True))
+    navigate("Cleanup")
     find("trashed ·", scroll=True, timeout=30)
     assert "clip-reencoded.mp4" not in adb("shell", "ls", gallery).splitlines()
     assert "clip-original.mp4" not in adb("shell", "ls", gallery).splitlines()
@@ -311,7 +340,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
         selected_count == 4
     )
     screenshot("cleanup-history.png")
-    tap(find("Restore from Trash"))
+    tap(find("Restore from Trash", button=True))
     tap(find("Continue"))
     tap(find("Allow", timeout=20, button=True))
     find("restored ·", scroll=True, timeout=30)
