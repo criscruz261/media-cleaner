@@ -58,7 +58,7 @@ try {
       })
       .getByRole("checkbox")
       .click();
-    await liveGroup.locator(".group-actions select").selectOption("quarantine");
+    await page.getByLabel("Batch cleanup destination").selectOption("quarantine");
     await liveGroup
       .getByRole("button", { name: /Delete selected · 1/ })
       .click();
@@ -217,7 +217,7 @@ try {
     if (await original.getByRole("checkbox").isChecked())
       throw new Error("Original must not be selected for deletion");
   }
-  await group.locator(".group-actions select").selectOption("quarantine");
+  await page.getByLabel("Batch cleanup destination").selectOption("quarantine");
   await group.getByRole("button", { name: /Delete selected/ }).click();
   await page
     .getByRole("heading", { name: /Dry-run cleanup preview/ })

@@ -38,6 +38,7 @@ export type MediaFile = {
   warnings: string[];
 };
 export type Group = {
+  selected_count?: number;
   id: string;
   scan_id: string;
   classification: string;

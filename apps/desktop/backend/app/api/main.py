@@ -585,7 +585,10 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                         "warnings": metadata.warnings if metadata else [],
                     }
                 )
-            return record(group) | {"files": members}
+            selected_count = session.scalar(select(func.count()).select_from(
+                query.where(GroupMember.keep.is_(False)).subquery()
+            ))
+            return record(group) | {"files": members, "selected_count": selected_count}
 
     @app.post("/api/v1/groups/{group_id}/review")
     def review(group_id: str, value: ReviewRequest):

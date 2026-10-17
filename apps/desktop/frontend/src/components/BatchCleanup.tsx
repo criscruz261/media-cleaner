@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCleanupDestination } from "./CleanupDestinationContext";
 import { useMutation, useIsMutating } from "@tanstack/react-query";
 import { api } from "../services/api";
 import type { Cleanup } from "../types/api";
@@ -13,9 +13,7 @@ export function BatchCleanup({
   classification?: "" | "EXACT_DUPLICATE" | "SIMILAR_CONTENT";
   onPlan: (plan: Cleanup) => void;
 }) {
-  const [destination, setDestination] = useState<"trash" | "quarantine">(
-    "trash",
-  );
+  const [destination, setDestination] = useCleanupDestination();
   const pendingChanges = useIsMutating();
   const plan = useMutation({
     mutationFn: () =>

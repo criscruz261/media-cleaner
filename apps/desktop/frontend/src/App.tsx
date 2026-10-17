@@ -1,3 +1,7 @@
+import {
+  CleanupDestinationContext,
+  type CleanupDestination,
+} from "./components/CleanupDestinationContext";
 import { ScannerResetContext } from "./components/ScannerResetContext";
 import {
   GroupFilterContext,
@@ -40,6 +44,8 @@ const pages = [
   ["Settings", SettingsIcon],
 ] as const;
 export function App() {
+  const [cleanupDestination, setCleanupDestination] =
+    useState<CleanupDestination>("trash");
   const [scannerVersion, setScannerVersion] = useState(0);
   const [groupFilter, setGroupFilter] = useState<GroupFilter>("");
   const [stopped, setStopped] = useState(false);
@@ -84,6 +90,9 @@ export function App() {
     queryFn: () => api<Preferences>("/settings"),
     enabled: connected,
   });
+  useEffect(() => {
+    if (settings.data) setCleanupDestination(settings.data.cleanup_destination);
+  }, [settings.data?.cleanup_destination]);
   useEffect(() => {
     saveLocal(workspaceKey, { page, scanId });
   }, [page, scanId]);
@@ -205,211 +214,217 @@ export function App() {
       </main>
     );
   return (
-    <ScannerResetContext.Provider value={resetScanner}>
-      <GroupFilterContext.Provider value={[groupFilter, setGroupFilter]}>
-        <PreviewContext.Provider
-          value={(groupId, initialId, scanId) =>
-            setPreview({ groupId, initialId, scanId })
-          }
-        >
-          <div
-            className={`app-shell ${sidebar.collapsed ? "sidebar-collapsed" : ""}`}
-            style={
-              {
-                "--sidebar-width": `${sidebar.collapsed ? 76 : sidebar.width}px`,
-              } as CSSProperties
+    <CleanupDestinationContext.Provider
+      value={[cleanupDestination, setCleanupDestination]}
+    >
+      <ScannerResetContext.Provider value={resetScanner}>
+        <GroupFilterContext.Provider value={[groupFilter, setGroupFilter]}>
+          <PreviewContext.Provider
+            value={(groupId, initialId, scanId) =>
+              setPreview({ groupId, initialId, scanId })
             }
           >
-            <aside className="sidebar">
-              <button
-                className="sidebar-toggle"
-                aria-label={
-                  sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"
-                }
-                aria-expanded={!sidebar.collapsed}
-                onClick={() =>
-                  setSidebar((value) => ({
-                    ...value,
-                    collapsed: !value.collapsed,
-                  }))
-                }
-              >
-                {sidebar.collapsed ? "»" : "«"}
-              </button>
-              <div
-                className="sidebar-resizer"
-                role="separator"
-                aria-label="Resize sidebar"
-                aria-orientation="vertical"
-                aria-valuemin={200}
-                aria-valuemax={420}
-                aria-valuenow={sidebar.width}
-                tabIndex={sidebar.collapsed ? -1 : 0}
-                onPointerDown={(event) => {
-                  if (!sidebar.collapsed)
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                }}
-                onPointerMove={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId))
-                    setSidebar({
-                      collapsed: false,
-                      width: Math.min(420, Math.max(200, event.clientX)),
-                    });
-                }}
-                onPointerUp={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId))
-                    event.currentTarget.releasePointerCapture(event.pointerId);
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
-                      event.key,
-                    )
-                  ) {
-                    event.preventDefault();
+            <div
+              className={`app-shell ${sidebar.collapsed ? "sidebar-collapsed" : ""}`}
+              style={
+                {
+                  "--sidebar-width": `${sidebar.collapsed ? 76 : sidebar.width}px`,
+                } as CSSProperties
+              }
+            >
+              <aside className="sidebar">
+                <button
+                  className="sidebar-toggle"
+                  aria-label={
+                    sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"
+                  }
+                  aria-expanded={!sidebar.collapsed}
+                  onClick={() =>
                     setSidebar((value) => ({
                       ...value,
-                      width:
-                        event.key === "Home"
-                          ? 200
-                          : event.key === "End"
-                            ? 420
-                            : Math.min(
-                                420,
-                                Math.max(
-                                  200,
-                                  value.width +
-                                    (event.key === "ArrowRight" ? 16 : -16),
-                                ),
-                              ),
-                    }));
+                      collapsed: !value.collapsed,
+                    }))
                   }
-                }}
-              />
-              <a
-                className="brand"
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setPage("Dashboard");
-                }}
-              >
-                <span className="brand-icon">
-                  <Leaf size={23} />
-                </span>
-                <span>
-                  Media Cleaner<small>A little less clutter</small>
-                </span>
-              </a>
-              <div className="nav-label">Workspace</div>
-              <nav aria-label="Main navigation">
-                {pages.map(([name, Icon]) => (
-                  <button
-                    key={name}
-                    aria-label={name === "Review" ? "Duplicate review" : name}
-                    title={name === "Review" ? "Duplicate review" : name}
-                    className={page === name ? "active" : ""}
-                    onClick={() => setPage(name)}
-                    aria-current={page === name ? "page" : undefined}
-                  >
-                    <Icon size={19} />
-                    <span className="nav-text">
-                      {name === "Review" ? "Duplicate review" : name}
-                    </span>
-                  </button>
-                ))}
-              </nav>
-              <div className="sidebar-bottom">
-                <div className="sidebar-note">
-                  <LockKeyhole size={20} />
-                  <strong>Your media stays yours.</strong>
-                  <p>
-                    Local analysis. No uploads.
-                    <br />
-                    No account required.
-                  </p>
-                  <span>
-                    <i /> Running on this computer
-                  </span>
-                </div>
-                <div className="sidebar-footer">
-                  Phase 3 <span>v0.1.0</span>
-                </div>
-                <ShutdownControl
-                  onStopped={() => {
-                    setPreview(null);
-                    setPlan(null);
-                    setConnected(false);
-                    setStopped(true);
+                >
+                  {sidebar.collapsed ? "»" : "«"}
+                </button>
+                <div
+                  className="sidebar-resizer"
+                  role="separator"
+                  aria-label="Resize sidebar"
+                  aria-orientation="vertical"
+                  aria-valuemin={200}
+                  aria-valuemax={420}
+                  aria-valuenow={sidebar.width}
+                  tabIndex={sidebar.collapsed ? -1 : 0}
+                  onPointerDown={(event) => {
+                    if (!sidebar.collapsed)
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                  }}
+                  onPointerMove={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId))
+                      setSidebar({
+                        collapsed: false,
+                        width: Math.min(420, Math.max(200, event.clientX)),
+                      });
+                  }}
+                  onPointerUp={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId))
+                      event.currentTarget.releasePointerCapture(
+                        event.pointerId,
+                      );
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                        event.key,
+                      )
+                    ) {
+                      event.preventDefault();
+                      setSidebar((value) => ({
+                        ...value,
+                        width:
+                          event.key === "Home"
+                            ? 200
+                            : event.key === "End"
+                              ? 420
+                              : Math.min(
+                                  420,
+                                  Math.max(
+                                    200,
+                                    value.width +
+                                      (event.key === "ArrowRight" ? 16 : -16),
+                                  ),
+                                ),
+                      }));
+                    }
                   }}
                 />
-              </div>
-            </aside>
-            <div className="workspace">
-              <header>
-                <div>
-                  <span className="muted">Workspace</span>
-                  <span className="breadcrumb">/</span>
-                  {page === "Review" ? "Duplicate review" : page}
+                <a
+                  className="brand"
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setPage("Dashboard");
+                  }}
+                >
+                  <span className="brand-icon">
+                    <Leaf size={23} />
+                  </span>
+                  <span>
+                    Media Cleaner<small>A little less clutter</small>
+                  </span>
+                </a>
+                <div className="nav-label">Workspace</div>
+                <nav aria-label="Main navigation">
+                  {pages.map(([name, Icon]) => (
+                    <button
+                      key={name}
+                      aria-label={name === "Review" ? "Duplicate review" : name}
+                      title={name === "Review" ? "Duplicate review" : name}
+                      className={page === name ? "active" : ""}
+                      onClick={() => setPage(name)}
+                      aria-current={page === name ? "page" : undefined}
+                    >
+                      <Icon size={19} />
+                      <span className="nav-text">
+                        {name === "Review" ? "Duplicate review" : name}
+                      </span>
+                    </button>
+                  ))}
+                </nav>
+                <div className="sidebar-bottom">
+                  <div className="sidebar-note">
+                    <LockKeyhole size={20} />
+                    <strong>Your media stays yours.</strong>
+                    <p>
+                      Local analysis. No uploads.
+                      <br />
+                      No account required.
+                    </p>
+                    <span>
+                      <i /> Running on this computer
+                    </span>
+                  </div>
+                  <div className="sidebar-footer">
+                    Phase 3 <span>v0.1.0</span>
+                  </div>
+                  <ShutdownControl
+                    onStopped={() => {
+                      setPreview(null);
+                      setPlan(null);
+                      setConnected(false);
+                      setStopped(true);
+                    }}
+                  />
                 </div>
-                <span className="local-badge">
-                  <span /> Local & private
-                </span>
-              </header>
-              <div className="sticky-review-progress">
-                <ScanProgress scanId={scanId} />
+              </aside>
+              <div className="workspace">
+                <header>
+                  <div>
+                    <span className="muted">Workspace</span>
+                    <span className="breadcrumb">/</span>
+                    {page === "Review" ? "Duplicate review" : page}
+                  </div>
+                  <span className="local-badge">
+                    <span /> Local & private
+                  </span>
+                </header>
+                <div className="sticky-review-progress">
+                  <ScanProgress scanId={scanId} />
+                </div>
+                <main className="content">
+                  {page === "Dashboard" ? (
+                    <Dashboard navigate={setPage} selectScan={setScanId} />
+                  ) : page === "Scanner" ? (
+                    <Scanner
+                      key={scannerVersion}
+                      onPlan={(value) => {
+                        setPlan(value);
+                      }}
+                      scanId={scanId}
+                      selectScan={setScanId}
+                      navigate={setPage}
+                    />
+                  ) : page === "Review" ? (
+                    <Review
+                      scanId={scanId}
+                      selectScan={setScanId}
+                      navigate={setPage}
+                      onPlan={(value) => {
+                        setPlan(value);
+                      }}
+                    />
+                  ) : page === "Cleanup" ? (
+                    <Cleanup plan={null} onComplete={() => {}} />
+                  ) : (
+                    <Settings />
+                  )}
+                  <footer>
+                    <span>
+                      Built for your memories. Designed for your peace of mind.
+                    </span>
+                    <span>
+                      <ShieldCheck size={13} /> Analysis never changes your
+                      originals.
+                    </span>
+                  </footer>
+                </main>
               </div>
-              <main className="content">
-                {page === "Dashboard" ? (
-                  <Dashboard navigate={setPage} selectScan={setScanId} />
-                ) : page === "Scanner" ? (
-                  <Scanner
-                    key={scannerVersion}
-                    onPlan={(value) => {
-                      setPlan(value);
-                    }}
-                    scanId={scanId}
-                    selectScan={setScanId}
-                    navigate={setPage}
-                  />
-                ) : page === "Review" ? (
-                  <Review
-                    scanId={scanId}
-                    selectScan={setScanId}
-                    navigate={setPage}
-                    onPlan={(value) => {
-                      setPlan(value);
-                    }}
-                  />
-                ) : page === "Cleanup" ? (
-                  <Cleanup plan={null} onComplete={() => {}} />
-                ) : (
-                  <Settings />
-                )}
-                <footer>
-                  <span>
-                    Built for your memories. Designed for your peace of mind.
-                  </span>
-                  <span>
-                    <ShieldCheck size={13} /> Analysis never changes your
-                    originals.
-                  </span>
-                </footer>
-              </main>
             </div>
-          </div>
-          {preview && (
-            <GroupPreview {...preview} onClose={() => setPreview(null)} />
-          )}
-          {plan && (
-            <CleanupDialog
-              key={plan.id}
-              plan={plan}
-              onClose={() => setPlan(null)}
-            />
-          )}
-        </PreviewContext.Provider>
-      </GroupFilterContext.Provider>
-    </ScannerResetContext.Provider>
+            {preview && (
+              <GroupPreview {...preview} onClose={() => setPreview(null)} />
+            )}
+            {plan && (
+              <CleanupDialog
+                key={plan.id}
+                plan={plan}
+                onClose={() => setPlan(null)}
+              />
+            )}
+          </PreviewContext.Provider>
+        </GroupFilterContext.Provider>
+      </ScannerResetContext.Provider>
+    </CleanupDestinationContext.Provider>
   );
 }

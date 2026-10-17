@@ -1,3 +1,8 @@
+import { useState } from "react";
+import {
+  CleanupDestinationContext,
+  type CleanupDestination,
+} from "./CleanupDestinationContext";
 import { it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -50,6 +55,19 @@ it.each([
     });
     vi.stubGlobal("fetch", fetch);
     const onPlan = vi.fn();
+    function MatchesWithDestination() {
+      const destination = useState<CleanupDestination>("trash");
+      return (
+        <CleanupDestinationContext.Provider value={destination}>
+          <LiveMatches
+            scanId="scan"
+            status={status}
+            navigate={vi.fn()}
+            onPlan={onPlan}
+          />
+        </CleanupDestinationContext.Provider>
+      );
+    }
     try {
       render(
         <QueryClientProvider
@@ -57,17 +75,18 @@ it.each([
             new QueryClient({ defaultOptions: { queries: { retry: false } } })
           }
         >
-          <LiveMatches
-            scanId="scan"
-            status={status}
-            navigate={vi.fn()}
-            onPlan={onPlan}
-          />
+          <MatchesWithDestination />
         </QueryClientProvider>,
       );
       await waitFor(() =>
         expect(screen.getAllByRole("checkbox")).toHaveLength(2),
       );
+      fireEvent.change(screen.getByLabelText("Batch cleanup destination"), {
+        target: { value: "quarantine" },
+      });
+      expect(
+        screen.queryByLabelText("Cleanup destination"),
+      ).not.toBeInTheDocument();
       expect(screen.getAllByRole("checkbox")[0]).not.toBeChecked();
       expect(
         screen.getByRole("button", { name: /Delete selected · 0/ }),
@@ -103,7 +122,7 @@ it.each([
       expect(JSON.parse(call[1]!.body as string)).toMatchObject({
         group_id: "group",
         file_ids: all ? ["one", "two"] : ["two"],
-        destination: "trash",
+        destination: "quarantine",
       });
       expect(
         fetch.mock.calls.some(([url]) => url.includes("/cleanup/execute")),

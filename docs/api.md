@@ -74,3 +74,5 @@ After a successful Stop scan, the desktop clears the selected scan and returns t
 `GET /scans/{id}` includes `checkpoint_storage.database` (the absolute SQLite checkpoint database path) and `checkpoint_storage.folder_caches` (absolute `.media-cleaner-cache` paths under the scan roots). Scanner displays these under File activity → Checkpoint & recovery. Cache folders contain per-file JSON entries in hash-prefix subfolders; folder cache failures remain visible in scan warnings.
 
 Current scan has a persisted “Show processing thumbnails” toggle. Active file activity includes `file_id`; the thumbnail endpoint permits an identity-checked preview for an actively processed `discovered` file as well as ready files. Other unfinished files remain unavailable. Disabling the toggle unmounts thumbnail images; unsupported decoders display a fallback without blocking scanning.
+
+Cleanup destination is selected once in the review header and shared by both per-group and batch cleanup on Scanner and Duplicate review. Group cards no longer have their own destination selector.

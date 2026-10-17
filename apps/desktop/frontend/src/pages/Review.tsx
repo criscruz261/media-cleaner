@@ -1,13 +1,14 @@
+import { useCleanupDestination } from "../components/CleanupDestinationContext";
 import { groupPage } from "../services/groupPages";
 import { GroupFilters, useGroupFilter } from "../components/GroupFilters";
 import { GroupPreview, PreviewContext } from "../components/GroupPreview";
 import { BatchCleanup } from "../components/BatchCleanup";
 import { VideoCompare } from "../components/VideoCompare";
-import { useState, useEffect, useContext } from "react";
+import { useState, useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldCheck, ArrowRight, Layers3 } from "lucide-react";
 import { api, bytes, displayLabel } from "../services/api";
-import type { Scan, Page, Group, Cleanup, Settings } from "../types/api";
+import type { Scan, Page, Group, Cleanup } from "../types/api";
 import { Empty, ErrorMessage, Loading, Pagination } from "../components/ui";
 import { MediaPreview } from "../components/MediaPreview";
 export function Review({
@@ -142,16 +143,9 @@ export function GroupCard({
 }) {
   const openPreview = useContext(PreviewContext);
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0),
-    [destination, setDestination] = useState<"trash" | "quarantine">("trash");
+  const [offset, setOffset] = useState(0);
+  const [destination] = useCleanupDestination();
   const client = useQueryClient();
-  const preferences = useQuery({
-    queryKey: ["settings"],
-    queryFn: () => api<Settings>("/settings"),
-  });
-  useEffect(() => {
-    if (preferences.data) setDestination(preferences.data.cleanup_destination);
-  }, [preferences.data?.cleanup_destination]);
   const detail = useQuery({
     queryKey: ["group", group.id, offset],
     refetchInterval: live ? 1000 : false,
@@ -179,6 +173,7 @@ export function GroupCard({
     detail.data?.files.filter(
       (file) => !file.keep && file.status === "ready",
     ) ?? [];
+  const selectedCount = detail.data?.selected_count ?? eligible.length;
   const plan = useMutation({
     mutationFn: async () => {
       const files = [];
@@ -390,23 +385,10 @@ export function GroupCard({
             to keep none. To change the keeper, keep another copy first.
           </p>
         )}
-        <div>
-          <label htmlFor={`destination-${group.id}`}>Cleanup destination</label>
-          <select
-            id={`destination-${group.id}`}
-            value={destination}
-            onChange={(e) =>
-              setDestination(e.target.value as typeof destination)
-            }
-          >
-            <option value="trash">OS Trash / Recycle Bin</option>
-            <option value="quarantine">Same-volume quarantine</option>
-          </select>
-        </div>
         <button
           className="primary"
           disabled={
-            !eligible.length ||
+            !selectedCount ||
             plan.isPending ||
             review.isPending ||
             selectAll.isPending
@@ -414,7 +396,7 @@ export function GroupCard({
           onClick={() => plan.mutate()}
         >
           {selectForDeletion ? "Delete selected" : "Delete unchecked"} ·{" "}
-          {eligible.length} on this page <ArrowRight size={15} />
+          {selectedCount} in this group <ArrowRight size={15} />
         </button>
       </div>
       <ErrorMessage

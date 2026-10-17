@@ -360,6 +360,10 @@ def test_cleanup_snapshots_all_group_members_including_multiple_kept_files(clien
     assert client.post(f"/api/v1/groups/{group['id']}/review", json={
         "keep_ids": [files[0]["id"], files[1]["id"]],
     }).status_code == 200
+    page = client.get(f"/api/v1/groups/{group['id']}?offset=0&limit=1").json()
+    assert len(page["files"]) == 1
+    assert page["files"][0]["keep"] is True
+    assert page["selected_count"] == 1
     response = client.post("/api/v1/cleanup/plan-selected", json={"scan_id": job["id"]})
     assert response.status_code == 201, response.text
     item = response.json()["items"][0]
