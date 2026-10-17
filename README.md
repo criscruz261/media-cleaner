@@ -49,6 +49,8 @@ Windows PowerShell:
 ./scripts/run.ps1
 ```
 
+Windows setup detects Python 3.12+ and Node 22.12+ and installs missing prerequisites using `winget` (Microsoft App Installer). Installer prompts may request elevation. If winget cannot provide a usable Node.js installation, setup downloads the official Node.js 22 Windows ZIP, verifies its SHA-256 checksum, and keeps it in ignored `.tools/node` without administrator access. Setup reuses this runtime on later runs. It refreshes PATH for the current session before creating the environment and building the app. If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that terminal first. An explicit `PYTHON_BIN` must point to a working Python 3.12+ executable.
+
 Setup installs the pinned Python dependencies, the editable backend, frontend dependencies from package-lock.json, a production frontend build, and setup-time FFmpeg/FFprobe installation when missing. For frontend development, run the backend in one terminal and `npm run dev --prefix apps/desktop/frontend` in another; visit the Vite URL and paste the backend's launch token. Vite proxies `/api` to port 8765. VS Code tasks and pytest settings are included.
 
 FFmpeg/FFprobe are installed during setup or can be provided on PATH. ExifTool is optional for richer metadata. Scanning never downloads tools. See [dependencies](docs/dependencies.md). Missing tools and skipped comparisons are shown in Settings and the scanner’s paginated warnings list. Exact hashing works without them. Native folder dialogs use macOS AppleScript, Windows FolderBrowserDialog, or Linux Zenity/KDialog; paste paths when a dialog is unavailable.
