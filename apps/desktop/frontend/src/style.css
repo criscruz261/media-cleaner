@@ -1018,6 +1018,28 @@ footer span:last-child {
   .sidebar-collapsed .sidebar {
     padding: 18px 10px;
   }
+  .sidebar-collapsed .sidebar-toggle {
+    align-self: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .sidebar-collapsed .brand {
+    width: 100%;
+    justify-content: center;
+    gap: 0;
+  }
+  .sidebar-collapsed .brand-icon {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .sidebar-collapsed nav {
+    width: 100%;
+    justify-items: center;
+    margin-top: 20px;
+  }
   .sidebar-collapsed .brand > span:not(.brand-icon),
   .sidebar-collapsed .nav-text,
   .sidebar-collapsed .nav-label,
@@ -1027,9 +1049,22 @@ footer span:last-child {
     display: none;
   }
   .sidebar-collapsed nav button {
+    display: flex;
+    align-items: center;
     justify-content: center;
-    padding: 12px;
+    position: relative;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
     font-size: 0;
+  }
+  .sidebar-collapsed nav button.active:after {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
   }
 }
 @media (max-width: 650px) {
