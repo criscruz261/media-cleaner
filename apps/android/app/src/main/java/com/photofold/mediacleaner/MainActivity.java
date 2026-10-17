@@ -1574,7 +1574,9 @@ public final class MainActivity extends Activity {
             if (groupId == null) {
               for (Store.Group candidate :
                   store.groups(Integer.MAX_VALUE, cleanupFilter, cleanupSort))
-                if (store.reviewed(candidate)) requested.add(candidate);
+                if (store.reviewed(candidate)
+                    && candidate.files().stream().anyMatch(file -> !store.keep(candidate, file)))
+                  requested.add(candidate);
             } else {
               Store.Group candidate = store.group(groupId);
               if (candidate == null)

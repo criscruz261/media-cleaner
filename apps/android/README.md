@@ -45,7 +45,9 @@ cleanup follows the results with an explanation of the app preview and Android
 confirmation. Per-group selection and deletion actions remain available. Select all for deletion
 changes to Unselect all for deletion when every file is selected; unselecting
 keeps every file. Explicit file choices are included in batch cleanup without
-a separate mark-reviewed action.
+a separate mark-reviewed action. Groups with no selected files are skipped
+when preparing batch cleanup, so keeping an entire group does not block
+selections in other groups.
 
 Dashboard shows the latest scan's file count, exact and similar group counts,
 and shortcuts. Scanner handles album selection and checkpoints; Review contains
