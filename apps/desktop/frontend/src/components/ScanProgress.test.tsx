@@ -1,3 +1,4 @@
+import { ScannerResetContext } from "./ScannerResetContext";
 import { useState } from "react";
 import { it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -48,6 +49,7 @@ it("shows deletion counts for the active filter independently of the overall sca
 });
 
 it("stops an active scan using the safe stop action and keeps saved results visible", async () => {
+  const reset = vi.fn();
   let status = "running";
   const fetch = vi.fn(async (url: string) => {
     if (url.endsWith("/stop")) status = "cancelled";
@@ -71,12 +73,15 @@ it("stops an active scan using the safe stop action and keeps saved results visi
   try {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <ScanProgress scanId="scan" />
+        <ScannerResetContext.Provider value={reset}>
+          <ScanProgress scanId="scan" />
+        </ScannerResetContext.Provider>
       </QueryClientProvider>,
     );
     await screen.findByRole("button", { name: "Pause & save checkpoint" });
     fireEvent.click(screen.getByRole("button", { name: "Stop scan" }));
     await screen.findByText("Scan cancelled · 2 / 3 files processed");
+    expect(reset).toHaveBeenCalledOnce();
     expect(
       fetch.mock.calls.some(([url]) => url.endsWith("/scans/scan/stop")),
     ).toBe(true);

@@ -1,6 +1,12 @@
+import { ScannerResetContext } from "../components/ScannerResetContext";
 import { ScanWorkflow } from "../components/ScanWorkflow";
-import { useState, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useContext } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useIsMutating,
+} from "@tanstack/react-query";
 import {
   FolderOpen,
   Play,
@@ -26,6 +32,16 @@ export function Scanner({
   navigate: (page: string) => void;
   onPlan?: (plan: Cleanup) => void;
 }) {
+  const resetWorkspace = useContext(ScannerResetContext);
+  const busy = useIsMutating() > 0;
+  const resetScanner = () => {
+    setWarningOffset(0);
+    if (resetWorkspace) resetWorkspace();
+    else {
+      selectScan("");
+      navigate("Scanner");
+    }
+  };
   const [draft] = useState(loadDraft);
   const [roots, setRoots] = useState(draft.roots),
     [excluded, setExcluded] = useState(draft.excluded),
@@ -86,7 +102,10 @@ export function Scanner({
   });
   const control = useMutation({
     mutationFn: (action: string) => api(`/scans/${scanId}/${action}`, {}),
-    onSuccess: () => client.invalidateQueries(),
+    onSuccess: (_, action) => {
+      void client.invalidateQueries();
+      if (action === "stop") resetScanner();
+    },
   });
   const browse = useMutation({
     mutationFn: () => api<{ path: string | null }>("/folders/choose", {}),
@@ -105,6 +124,22 @@ export function Scanner({
           <h1>Scanner</h1>
           <p>Choose folders, scan media, then review matches before cleanup.</p>
         </div>
+        <button
+          disabled={busy || (!!scanId && !scan.data)}
+          onClick={() => {
+            if (
+              ["queued", "running", "paused", "interrupted"].includes(
+                scan.data?.status ?? "",
+              )
+            )
+              control.mutate("stop");
+            else resetScanner();
+          }}
+        >
+          {control.isPending && control.variables === "stop"
+            ? "Stopping & resetting…"
+            : "Reset scanner"}
+        </button>
       </div>
       <ScanWorkflow scan={scan.data} />
       <details className="panel scanner-setup" open={!scanId}>

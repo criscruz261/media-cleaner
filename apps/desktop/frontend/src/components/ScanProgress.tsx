@@ -1,3 +1,4 @@
+import { ScannerResetContext } from "./ScannerResetContext";
 import { useContext } from "react";
 import { GroupFilterContext } from "./GroupFilters";
 import { ErrorMessage } from "./ui";
@@ -12,6 +13,7 @@ import type { Scan } from "../types/api";
 
 export function ScanProgress({ scanId }: { scanId: string }) {
   const client = useQueryClient();
+  const resetScanner = useContext(ScannerResetContext);
   const classification = useContext(GroupFilterContext)?.[0] ?? "";
   const selection = useQuery({
     queryKey: ["selection-summary", scanId, classification],
@@ -25,7 +27,10 @@ export function ScanProgress({ scanId }: { scanId: string }) {
   const busy = useIsMutating() > 0;
   const control = useMutation({
     mutationFn: (action: string) => api(`/scans/${scanId}/${action}`, {}),
-    onSuccess: () => client.invalidateQueries(),
+    onSuccess: (_, action) => {
+      void client.invalidateQueries();
+      if (action === "stop") resetScanner?.();
+    },
   });
   const scan = useQuery({
     queryKey: ["review-scan-progress", scanId],
