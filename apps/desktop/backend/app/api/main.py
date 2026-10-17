@@ -33,7 +33,7 @@ from app.database.models import (
     CleanupOperation,
 )
 from app.workers.manager import JobManager
-from app.cleanup.service import CleanupService
+from app.cleanup.service import CleanupService, group_error
 from app.metadata.extract import tools
 from app.metadata.decoding import load_still
 
@@ -561,11 +561,11 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 else {member.file_id for member in members if member.keep}
             )
             if not set(value.changes) <= ids:
-                raise ValueError("Changed files must belong to this group")
+                raise group_error(session, group_id, "Changed files must belong to this group")
             for file_id, keep in value.changes.items():
                 keep_ids.add(file_id) if keep else keep_ids.discard(file_id)
             if not keep_ids <= ids:
-                raise ValueError("Keep IDs must belong to this group")
+                raise group_error(session, group_id, "Keep IDs must belong to this group")
             explicit_keep_none = value.keep_ids == [] or (
                 bool(group.evidence.get("allow_keep_none")) and not any(member.keep for member in members)
             )
@@ -574,11 +574,11 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 and not explicit_keep_none
                 and not any(session.get(File, file_id).status == "ready" for file_id in keep_ids)
             ):
-                raise ValueError("Keep at least one file in each exact-duplicate group")
+                raise group_error(session, group_id, "Keep at least one file in each exact-duplicate group")
             for member in members:
                 file = session.get(File, member.file_id)
                 if file.protected_reason and member.file_id not in keep_ids:
-                    raise ValueError("Protected assets must remain selected")
+                    raise group_error(session, group_id, "Protected assets must remain selected")
                 member.keep = member.file_id in keep_ids
                 choice = session.get(FileReviewChoice, (member.file_id, group.classification))
                 if choice:

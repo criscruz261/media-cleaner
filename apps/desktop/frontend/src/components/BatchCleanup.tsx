@@ -28,11 +28,11 @@ export function BatchCleanup({
   });
   return (
     <div className="panel">
-      <h2>Clean up across groups</h2>
+      <h2>Review groups before deletion</h2>
       <p>
-        Select unwanted files in multiple groups, then preview all selections
-        together. Includes selected exact copies and your saved selections in
-        similar groups across every page matching the current group filter.
+        Review kept files and selected deletions in groups matching your current
+        filter, across all pages. Nothing is moved until you confirm in the
+        review window.
       </p>
       <p>
         Scope:{" "}
@@ -60,7 +60,13 @@ export function BatchCleanup({
           disabled={!scanId || pendingChanges > 0}
           onClick={() => plan.mutate()}
         >
-          Delete selected across groups
+          {plan.isPending
+            ? "Preparing review…"
+            : classification === "EXACT_DUPLICATE"
+              ? "Review exact duplicate groups"
+              : classification === "SIMILAR_CONTENT"
+                ? "Review similar media groups"
+                : "Review selected groups"}
         </button>
       </div>
       <ErrorMessage error={plan.error} />

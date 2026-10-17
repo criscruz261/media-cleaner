@@ -263,6 +263,17 @@ final class Store extends SQLiteOpenHelper {
         || !file.protection.isEmpty();
   }
 
+  static String groupLabel(Group group) {
+    return "Group "
+        + group.id()
+        + " ("
+        + group.files().stream()
+            .limit(3)
+            .map(file -> file.name)
+            .collect(java.util.stream.Collectors.joining(", "))
+        + ")";
+  }
+
   synchronized void select(String groupId, String uri, boolean selected) {
     select(groupId, uri, selected, false);
   }
@@ -272,14 +283,16 @@ final class Store extends SQLiteOpenHelper {
     if (group == null) throw new IllegalArgumentException("Group changed. Reopen comparison.");
     Media file =
         group.files.stream().filter(item -> item.uri.equals(uri)).findFirst().orElseThrow();
-    if (selected && !file.protection.isEmpty()) throw new IllegalArgumentException(file.protection);
+    if (selected && !file.protection.isEmpty())
+      throw new IllegalArgumentException(groupLabel(group) + ": " + file.protection);
     if (selected
         && !all
         && keep(group, file)
         && group.classification.equals("EXACT_DUPLICATE")
         && group.files.stream().noneMatch(item -> !item.uri.equals(uri) && keep(group, item)))
       throw new IllegalArgumentException(
-          "Keep at least one file. Keep another copy first to change the keeper.");
+          groupLabel(group)
+              + ": Keep at least one file. Keep another copy first to change the keeper.");
     ContentValues values = new ContentValues();
     values.put("uri", uri);
     values.put("identity", file.identity);

@@ -1198,3 +1198,25 @@ footer span:last-child {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.group-identifier {
+  overflow-wrap: anywhere;
+}
+
+.pagination {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.pagination label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.pagination-jump {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.pagination-jump input {
+  width: 85px;
+}

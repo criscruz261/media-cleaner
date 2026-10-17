@@ -26,7 +26,14 @@ it.each(["", "EXACT_DUPLICATE", "SIMILAR_CONTENT"] as const)(
         target: { value: "quarantine" },
       });
       fireEvent.click(
-        screen.getByRole("button", { name: "Delete selected across groups" }),
+        screen.getByRole("button", {
+          name:
+            classification === "EXACT_DUPLICATE"
+              ? "Review exact duplicate groups"
+              : classification === "SIMILAR_CONTENT"
+                ? "Review similar media groups"
+                : "Review selected groups",
+        }),
       );
       await waitFor(() =>
         expect(onPlan).toHaveBeenCalledWith({ id: "combined-plan" }),

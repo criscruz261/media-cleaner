@@ -3,13 +3,9 @@ export function GroupFilters({
   classification,
   sort,
   onChange,
-  pageSize,
-  onPageSizeChange,
 }: {
   classification: GroupFilter;
   sort: string;
-  pageSize: number;
-  onPageSizeChange: (size: number) => void;
   onChange: (classification: GroupFilter, sort: string) => void;
 }) {
   return (
@@ -39,20 +35,6 @@ export function GroupFilters({
           <option value="exact_first">Exact duplicates first</option>
           <option value="largest">Most recoverable space</option>
           <option value="most_files">Most files</option>
-        </select>
-      </label>
-      <label>
-        Groups per page{" "}
-        <select
-          aria-label="Groups per page"
-          value={pageSize}
-          onChange={(event) => onPageSizeChange(Number(event.target.value))}
-        >
-          {[5, 10, 20, 50].map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
         </select>
       </label>
       <p className="hint">

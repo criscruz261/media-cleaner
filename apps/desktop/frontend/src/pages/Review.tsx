@@ -1,3 +1,4 @@
+import { groupPage } from "../services/groupPages";
 import { GroupFilters, type GroupFilter } from "../components/GroupFilters";
 import { GroupPreview, PreviewContext } from "../components/GroupPreview";
 import { BatchCleanup } from "../components/BatchCleanup";
@@ -31,8 +32,10 @@ export function Review({
   const groups = useQuery({
     queryKey: ["groups", scanId, offset, classification, sort, pageSize],
     queryFn: () =>
-      api<Page<Group>>(
-        `/groups?scan_id=${scanId}&offset=${offset}&limit=${pageSize}&sort=${sort}${classification ? `&classification=${classification}` : ""}`,
+      groupPage<Page<Group>>(
+        `/groups?scan_id=${scanId}&sort=${sort}${classification ? `&classification=${classification}` : ""}`,
+        offset,
+        pageSize,
       ),
     enabled: !!scanId,
     refetchInterval: 1000,
@@ -74,11 +77,6 @@ export function Review({
       <GroupFilters
         classification={classification}
         sort={sort}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setOffset(0);
-        }}
         onChange={(value, order) => {
           setClassification(value);
           setSort(order);
@@ -119,6 +117,10 @@ export function Review({
         offset={offset}
         total={groups.data?.total ?? 0}
         size={pageSize}
+        onSizeChange={(size) => {
+          setPageSize(size);
+          setOffset(0);
+        }}
         onChange={setOffset}
       />
     </>
@@ -223,6 +225,7 @@ export function GroupCard({
       {detail.data?.files.some((file) => file.media_type === "video") && (
         <VideoCompare groupId={group.id} scanId={group.scan_id} />
       )}
+      <p className="hint group-identifier">Group {group.id}</p>
       <p className="recommendation">{group.recommendation}</p>
       <details className="evidence">
         <summary>

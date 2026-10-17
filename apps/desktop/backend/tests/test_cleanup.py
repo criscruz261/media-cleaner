@@ -286,6 +286,8 @@ def test_exact_group_rejects_removing_last_keeper_and_legacy_keep_none(client, w
         response = client.post("/api/v1/groups/" + group["id"] + "/review", json=payload)
         assert response.status_code == 400
         assert "at least one" in response.text
+        assert group["id"] in response.text
+        assert keeper["name"] in response.text
     # A legacy saved keep-none selection must not bypass cleanup validation.
     with client.app.state.sessions.begin() as session:
         for member in session.scalars(select(GroupMember).where(GroupMember.group_id == group["id"])):
@@ -294,6 +296,8 @@ def test_exact_group_rejects_removing_last_keeper_and_legacy_keep_none(client, w
         "group_id": group["id"], "file_ids": [file["id"] for file in group["files"]],
     })
     assert response.status_code == 400
+    assert group["id"] in response.text
+    assert keeper["name"] in response.text
     assert all(Path(file["path"]).exists() for file in group["files"])
 
 

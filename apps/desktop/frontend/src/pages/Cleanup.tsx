@@ -60,6 +60,19 @@ export function Cleanup({
             </h2>
             <span className="badge">No files moved yet</span>
           </div>
+          <p className="notice">
+            Review scope:{" "}
+            {plan.items.every(
+              (item) => item.classification === "EXACT_DUPLICATE",
+            )
+              ? "Exact duplicates only"
+              : plan.items.every(
+                    (item) => item.classification === "SIMILAR_CONTENT",
+                  )
+                ? "Similar media only"
+                : "Selected groups"}
+            . Only the files shown below are included in this cleanup.
+          </p>
           <p>
             <strong>
               {plan.items.length} files · {bytes(plan.total_bytes)}

@@ -567,6 +567,7 @@ public final class MainActivity extends Activity {
                   members,
                   "Showing first 50 files. Video comparison pages through the full video group.");
           });
+    label(card, "Group " + group.id());
     Button approve =
         button(
             card,
@@ -910,8 +911,8 @@ public final class MainActivity extends Activity {
     dialog.getWindow().setLayout(-1, -1);
   }
 
-  private void validateExactKeepers(Set<String> selected, MediaRepository.Check checkpoint, boolean rehash)
-      throws Exception {
+  private void validateExactKeepers(
+      Set<String> selected, MediaRepository.Check checkpoint, boolean rehash) throws Exception {
     for (Store.Group group : store.groups(Integer.MAX_VALUE, "EXACT_DUPLICATE", 0)) {
       if (group.files().stream().noneMatch(file -> selected.contains(file.uri))) continue;
       if (store.explicitKeepNone(group)
@@ -929,7 +930,8 @@ public final class MainActivity extends Activity {
       }
       if (!retained)
         throw new IllegalArgumentException(
-            "Keep at least one verified file in each exact-duplicate group.");
+            Store.groupLabel(group)
+                + ": Keep at least one verified file in this exact-duplicate group.");
     }
   }
 
@@ -990,8 +992,9 @@ public final class MainActivity extends Activity {
               if (keeper == null
                   && group.files().stream().anyMatch(file -> store.keep(group, file)))
                 throw new IllegalArgumentException(
-                    "A retained file is selected in another group. Keep it there too, or select the"
-                        + " whole group.");
+                    Store.groupLabel(group)
+                        + ": A retained file is selected in another group. Keep it there too, or"
+                        + " select the whole group.");
               for (Media file : group.files()) {
                 if (store.keep(group, file) || !added.add(file.uri)) continue;
                 if (!file.protection.isEmpty()

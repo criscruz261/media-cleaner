@@ -75,6 +75,7 @@ export function CleanupComparison({ plan }: { plan: Cleanup }) {
                   ? "Similar media"
                   : "Selected media"}
             </h3>
+            <p className="hint group-identifier">Group {id}</p>
             <div className="cleanup-review-columns">
               <section
                 className="cleanup-review-kept"

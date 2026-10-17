@@ -14,6 +14,17 @@ from app.hashing.sha256 import hash_file
 log = logging.getLogger("media_cleaner.cleanup")
 
 
+def group_error(session, group_id, message):
+    names = session.scalars(
+        select(File.name).join(GroupMember, GroupMember.file_id == File.id)
+        .where(GroupMember.group_id == group_id).order_by(File.path).limit(3)
+    ).all()
+    label = f"Group {group_id}"
+    if names:
+        label += " (" + ", ".join(names) + ")"
+    return ValueError(f"{label}: {message}")
+
+
 class CleanupService:
     def __init__(self, sessions, settings):
         self.sessions = sessions
@@ -54,7 +65,7 @@ class CleanupService:
                              if identity(Path(file.path)) == stored_identity(file)
                              and (not rehash or hash_file(Path(file.path), stored_identity(file)) == file.sha256)), None)
             if retained is None:
-                raise ValueError("Keep at least one verified file in each exact-duplicate group")
+                raise group_error(session, exact.id, "Keep at least one verified file in this exact-duplicate group")
         active_id = session.scalar(select(ScanJob.id).where(ScanJob.status.in_(["running", "queued"])))
         items = []
         for file_id in ids:
@@ -74,17 +85,17 @@ class CleanupService:
                 membership_query = membership_query.where(GroupMember.group_id == selected_group)
             member = session.scalar(membership_query.limit(1))
             if not member or member.keep:
-                raise ValueError("Only files explicitly unchecked during review may be cleaned up")
+                raise group_error(session, selected_group or (member.group_id if member else "unknown"), "Only selected files may be cleaned up")
             group = session.get(DuplicateGroup, member.group_id)
             approximate = group.classification != "EXACT_DUPLICATE"
             if approximate and (not selected_group or group.review_status != "reviewed"):
-                raise ValueError("Similar photos require manual review and an explicit group cleanup plan")
+                raise group_error(session, group.id, "Similar photos require manual review and an explicit group cleanup plan")
             path = Path(file.path)
             reason = file.protected_reason or protection(path, self.settings().protected_directories)
             if reason:
-                raise ValueError(f"Protected file: {reason}")
+                raise group_error(session, group.id, f"Protected file: {reason}")
             if identity(path) != stored_identity(file):
-                raise ValueError("File changed since scanning; scan again")
+                raise group_error(session, group.id, "File changed since scanning; scan again")
             keepers = session.scalars(
                 select(File)
                 .join(GroupMember, GroupMember.file_id == File.id)
@@ -105,17 +116,17 @@ class CleanupService:
                 and (approximate or bool(group.evidence.get("allow_keep_none")))
             )
             if not keepers and not remove_all:
-                raise ValueError("Keep a verified file or explicitly review this group to keep none")
+                raise group_error(session, group.id, "Keep a verified file or explicitly review this group to keep none")
             keeper = next(
                 (candidate for candidate in keepers if approximate or candidate.sha256 == file.sha256), None
             )
             if not remove_all and (not keeper or identity(Path(keeper.path)) != stored_identity(keeper)):
-                raise ValueError("Retained copy is missing or changed; scan again")
+                raise group_error(session, group.id, "Retained copy is missing or changed; scan again")
             if rehash:
                 if hash_file(path, stored_identity(file)) != file.sha256:
-                    raise ValueError("Selected file content changed")
+                    raise group_error(session, group.id, "Selected file content changed")
                 if keeper and hash_file(Path(keeper.path), stored_identity(keeper)) != keeper.sha256:
-                    raise ValueError("Retained file content changed")
+                    raise group_error(session, group.id, "Retained file content changed")
             items.append(
                 {
                     "file_id": file.id,

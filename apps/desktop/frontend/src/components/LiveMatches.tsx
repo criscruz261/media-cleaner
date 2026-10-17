@@ -1,3 +1,4 @@
+import { groupPage } from "../services/groupPages";
 import { GroupFilters, type GroupFilter } from "./GroupFilters";
 import { BatchCleanup } from "./BatchCleanup";
 import { GroupCard } from "../pages/Review";
@@ -5,7 +6,6 @@ import type { Cleanup } from "../types/api";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers3, ShieldCheck, ArrowRight } from "lucide-react";
-import { api } from "../services/api";
 import type { Group, Page } from "../types/api";
 import { ErrorMessage, Pagination } from "./ui";
 type Matches = Page<Group> & {
@@ -32,8 +32,10 @@ export function LiveMatches({
   const matches = useQuery({
     queryKey: ["scan-matches", scanId, offset, classification, sort, pageSize],
     queryFn: () =>
-      api<Matches>(
-        `/scans/${scanId}/matches?offset=${offset}&limit=${pageSize}&sort=${sort}${classification ? `&classification=${classification}` : ""}`,
+      groupPage<Matches>(
+        `/scans/${scanId}/matches?sort=${sort}${classification ? `&classification=${classification}` : ""}`,
+        offset,
+        pageSize,
       ),
     refetchInterval: running ? 1000 : false,
   });
@@ -71,11 +73,6 @@ export function LiveMatches({
       <GroupFilters
         classification={classification}
         sort={sort}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setOffset(0);
-        }}
         onChange={(value, order) => {
           setClassification(value);
           setSort(order);
@@ -118,6 +115,10 @@ export function LiveMatches({
         offset={offset}
         total={matches.data?.total ?? 0}
         size={pageSize}
+        onSizeChange={(size) => {
+          setPageSize(size);
+          setOffset(0);
+        }}
         onChange={setOffset}
       />
       {status === "completed" && (
