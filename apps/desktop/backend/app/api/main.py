@@ -285,7 +285,15 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             job = session.get(ScanJob, scan_id)
             if not job:
                 raise HTTPException(404, "Scan not found")
-            return record(job) | {"activity": manager.activity(scan_id), "checkpoint_at": job.updated_at}
+            from app.scanner.folder_cache import CACHE_NAME
+
+            return record(job) | {
+                "activity": manager.activity(scan_id), "checkpoint_at": job.updated_at,
+                "checkpoint_storage": {
+                    "database": str((directory / "media-cleaner.sqlite3").resolve()),
+                    "folder_caches": [str(Path(root) / CACHE_NAME) for root in job.options["roots"]],
+                },
+            }
 
     @app.get("/api/v1/scans/{scan_id}")
     def scan(scan_id: str):

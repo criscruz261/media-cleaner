@@ -1467,3 +1467,60 @@ footer span:last-child {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.scanner-activity-toggle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--canvas);
+}
+.scanner-activity-toggle::before {
+  content: "▸";
+}
+.scanner-activity[open] > .scanner-activity-toggle::before {
+  content: "▾";
+}
+.scanner-activity-toggle > span:first-child {
+  font-weight: 600;
+  color: var(--ink);
+}
+.scanner-activity-toggle .animate-spin {
+  color: var(--green);
+  flex-shrink: 0;
+}
+.scanner-activity-state {
+  font-size: 11px;
+}
+.scanner-activity .scanner-recovery {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.scanner-recovery strong svg {
+  display: inline;
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-activity-toggle .animate-spin {
+    animation: none;
+  }
+}
+
+.checkpoint-locations {
+  margin: 10px 0;
+}
+.checkpoint-locations dt {
+  font-weight: 600;
+  margin-top: 10px;
+}
+.checkpoint-locations dd {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.checkpoint-locations code {
+  font-size: 11px;
+}

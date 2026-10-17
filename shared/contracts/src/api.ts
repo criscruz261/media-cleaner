@@ -8,6 +8,7 @@ export type Scan = {
   bytes_processed: number;
   total_bytes?: number;
   checkpoint_at?: string;
+  checkpoint_storage?: { database: string; folder_caches: string[] };
   activity?: {
     path: string;
     phase: string;

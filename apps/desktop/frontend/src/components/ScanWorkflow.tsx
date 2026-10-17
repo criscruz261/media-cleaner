@@ -35,17 +35,7 @@ export function ScanWorkflow({ scan }: { scan?: Scan }) {
             ? "Discovering media in the selected folders."
             : current === 3
               ? "Finalizing match groups and keeper suggestions."
-              : `Analyzing media and publishing matches${
-                  scan.activity?.length
-                    ? ` · ${scan.activity
-                        .map((item) => item.phase)
-                        .filter(
-                          (phase, index, phases) =>
-                            phases.indexOf(phase) === index,
-                        )
-                        .join(", ")}`
-                    : "."
-                }`;
+              : "Analyzing media and publishing matches.";
   const next = !scan
     ? "Discover media, then analyze and compare files."
     : stopped

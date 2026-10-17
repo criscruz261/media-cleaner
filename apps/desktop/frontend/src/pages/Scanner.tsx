@@ -8,6 +8,7 @@ import {
   useIsMutating,
 } from "@tanstack/react-query";
 import {
+  LoaderCircle,
   FolderOpen,
   Play,
   Pause,
@@ -316,70 +317,114 @@ export function Scanner({
               <span>{scan.data.cache_hits} cached</span>
               <span>{scan.data.errors} errors</span>
             </div>
-            <details className="scanner-recovery">
-              <summary>
-                <ShieldCheck size={14} /> Auto-saved
-                {scan.data.checkpoint_at
-                  ? ` · ${new Date(scan.data.checkpoint_at).toLocaleTimeString()}`
-                  : ""}{" "}
-                · checkpoint & recovery details
+            <details className="scanner-activity">
+              <summary className="scanner-activity-toggle">
+                <span>File activity</span>
+                {active ||
+                control.isPending ||
+                /saving checkpoint|finalizing completed/i.test(
+                  scan.data.stage,
+                ) ? (
+                  <>
+                    <LoaderCircle
+                      size={15}
+                      className="animate-spin"
+                      aria-hidden="true"
+                    />
+                    <span className="scanner-activity-state">
+                      {scan.data.activity?.length
+                        ? `Processing · ${scan.data.activity.length} files ongoing`
+                        : "Working…"}
+                    </span>
+                  </>
+                ) : (
+                  <span className="scanner-activity-state">
+                    {scan.data.status === "completed"
+                      ? "Complete"
+                      : scan.data.status === "paused"
+                        ? "Paused"
+                        : "Stopped"}
+                  </span>
+                )}
               </summary>
-              <p>
-                Saved automatically after each file
-                {scan.data.checkpoint_at
-                  ? ` · Last checkpoint ${new Date(scan.data.checkpoint_at).toLocaleTimeString()}`
-                  : ""}
-                . Completed-file analysis and selections are also saved in
-                .media-cleaner-cache inside each selected folder. Refreshing
-                this page does not stop the scan. After a backend restart,
-                choose Resume; an unfinished file starts again safely.
-              </p>
+              <div className="scan-activity" aria-label="Current scan activity">
+                {scan.data.activity?.map((item) => (
+                  <div key={item.path}>
+                    <p className="file-path">
+                      <strong>{item.phase}</strong> · {item.path}
+                    </p>
+                    {item.phase === "hashing" ? (
+                      <>
+                        <progress
+                          aria-label={`Reading ${item.path}`}
+                          max={Math.max(item.size, 1)}
+                          value={item.bytes_done}
+                        />
+                        <small>
+                          {bytes(item.bytes_done)} / {bytes(item.size)}
+                        </small>
+                      </>
+                    ) : item.frames_total ? (
+                      <>
+                        <progress
+                          aria-label={`Comparing ${item.path}`}
+                          max={item.frames_total}
+                          value={item.frames_done}
+                        />
+                        <small>
+                          {item.frames_done} / {item.frames_total} samples
+                        </small>
+                      </>
+                    ) : (
+                      <progress aria-label={`Processing ${item.path}`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {!scan.data.activity?.length && (
+                <p className="hint">
+                  {active
+                    ? "Waiting for the next file activity update…"
+                    : "No files are being processed."}
+                </p>
+              )}
+              <div className="scanner-recovery">
+                <strong>
+                  <ShieldCheck size={14} /> Checkpoint & recovery
+                </strong>
+                {scan.data.checkpoint_storage && (
+                  <dl className="checkpoint-locations">
+                    <dt>Scan checkpoint database</dt>
+                    <dd>
+                      <code>{scan.data.checkpoint_storage.database}</code>
+                    </dd>
+                    <dt>Recovery cache folders</dt>
+                    {scan.data.checkpoint_storage.folder_caches.map((path) => (
+                      <dd key={path}>
+                        <code>{path}</code>
+                      </dd>
+                    ))}
+                  </dl>
+                )}
+                <p className="hint">
+                  Each folder cache stores per-file JSON checkpoints in
+                  subfolders. The database stores scan progress and review
+                  history; cache write failures are listed in scan warnings.
+                </p>
+
+                <p>
+                  Saved automatically after each file
+                  {scan.data.checkpoint_at
+                    ? ` · Last checkpoint ${new Date(scan.data.checkpoint_at).toLocaleTimeString()}`
+                    : ""}
+                  . Completed-file analysis and selections are also saved in
+                  .media-cleaner-cache inside each selected folder. Refreshing
+                  this page does not stop the scan. After a backend restart,
+                  choose Resume; an unfinished file starts again safely.
+                </p>
+              </div>
             </details>
-            {!!scan.data.activity?.length && (
-              <details className="scanner-activity">
-                <summary>
-                  File activity · {scan.data.activity.length} ongoing ·{" "}
-                  {scan.data.activity[0].phase}
-                </summary>
-                <div
-                  className="scan-activity"
-                  aria-label="Current scan activity"
-                >
-                  {scan.data.activity.map((item) => (
-                    <div key={item.path}>
-                      <p className="file-path">
-                        <strong>{item.phase}</strong> · {item.path}
-                      </p>
-                      {item.phase === "hashing" ? (
-                        <>
-                          <progress
-                            aria-label={`Reading ${item.path}`}
-                            max={Math.max(item.size, 1)}
-                            value={item.bytes_done}
-                          />
-                          <small>
-                            {bytes(item.bytes_done)} / {bytes(item.size)}
-                          </small>
-                        </>
-                      ) : item.frames_total ? (
-                        <>
-                          <progress
-                            aria-label={`Comparing ${item.path}`}
-                            max={item.frames_total}
-                            value={item.frames_done}
-                          />
-                          <small>
-                            {item.frames_done} / {item.frames_total} samples
-                          </small>
-                        </>
-                      ) : (
-                        <progress aria-label={`Processing ${item.path}`} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
             <div className="actions">
               {active ? (
                 <>
