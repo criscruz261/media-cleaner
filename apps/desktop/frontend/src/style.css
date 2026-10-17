@@ -1729,3 +1729,71 @@ footer span:last-child {
   min-width: 0;
   padding-block: 8px;
 }
+
+.live-matches-controls {
+  padding: 12px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.live-matches-controls > .section-heading {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.live-matches-controls > .section-heading h2 {
+  font-size: 15px;
+  margin-right: auto;
+}
+.live-matches-controls .progress-stats {
+  margin: 0;
+  gap: 12px;
+  font-size: 11px;
+}
+.live-matches-controls .notice {
+  padding: 8px 10px;
+  margin: 8px 0;
+  font-size: 11px;
+}
+.live-matches-controls .notice p {
+  margin: 0;
+}
+.live-matches-controls > .group-actions {
+  gap: 10px;
+  margin: 8px 0;
+}
+.live-matches-controls > .group-actions label {
+  font-size: 11px;
+}
+.live-matches-controls > .group-actions .hint {
+  font-size: 10px;
+  margin: 0;
+}
+.live-matches-controls > .panel {
+  margin: 8px 0 0;
+  padding: 10px 0 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+.live-matches-controls > .panel h2,
+.live-matches-controls > .panel > p:first-of-type {
+  display: none;
+}
+.live-matches-controls > .panel > p {
+  margin: 0 0 8px;
+  font-size: 11px;
+}
+.live-matches-controls > .panel .group-actions {
+  margin: 0;
+}
+.live-matches-results {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 2px solid var(--border);
+}
+.live-matches-results > .group-card:first-child {
+  margin-top: 0;
+}
