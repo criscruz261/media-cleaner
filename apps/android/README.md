@@ -7,7 +7,14 @@ A standalone, offline native Android app for Android 11+ (API 30+). It does not 
 The phone app follows the desktop's five sections using bottom navigation:
 **Dashboard**, **Scanner**, **Review**, **Cleanup**, and **Settings**. The green
 and cream palette, bordered cards, buttons, preview controls, and cleanup dialogs
-follow the desktop style with touch-sized controls. Scan progress stays visible
+follow the desktop style with touch-sized controls. Labels use sentence case.
+Review displays result groups side by side as width permits (up to three columns),
+with Comfortable, Compact, and Very compact density options saved on the device.
+Its banner shows filtered group counts and unique selected/total files across all
+pages. Exact-duplicate and similar-media filters also scope batch cleanup.
+File cards are green for kept files and red for files selected for deletion;
+checkboxes and text provide the same state without relying on color alone.
+The checkpoint-and-shutdown action is red. Scan progress stays visible
 across sections and inside media previews. Switching sections preserves review
 selections, filters, expanded groups, and each section's scroll position.
 
@@ -15,7 +22,7 @@ Dashboard shows the latest scan's file count, exact and similar group counts,
 and shortcuts. Scanner handles album selection and checkpoints; Review contains
 live matches, filters, comparisons and batch cleanup. Cleanup contains operation
 history and restore actions. Settings provides Android media permissions,
-storage/privacy information, and checkpoint-and-close. Android continues to
+storage/privacy information, and checkpoint-and-shutdown. Android continues to
 control media permissions and the final Trash/restore confirmation. This shares
 the desktop's organization while showing only features available on Android.
 
@@ -38,6 +45,9 @@ From the repository root:
 ```sh
 ./scripts/android/1-setup.sh
 ./scripts/android/2-build.sh
+# In a separate terminal, start the visible emulator:
+./scripts/android/5-start-emulator.sh
+# After the Android home screen appears:
 ./scripts/android/3-run.sh emulator-5554
 ./scripts/android/4-create-deploy-package.sh
 ```

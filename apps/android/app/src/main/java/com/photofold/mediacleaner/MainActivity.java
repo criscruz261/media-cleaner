@@ -46,7 +46,11 @@ public final class MainActivity extends Activity {
           return bitmap.getByteCount() / 1024;
         }
       };
-  private LinearLayout groups, history;
+  private GridLayout groups;
+  private LinearLayout history;
+  private TextView reviewSummary;
+  private int compactLevel = 1, lastGridWidth = -1, lastGridCount = -1;
+
   private final Map<String, LinearLayout> groupCards = new LinkedHashMap<>();
   private final Map<String, String> groupStamps = new HashMap<>();
   private final Set<String> expandedGroups = new HashSet<>();
@@ -78,6 +82,7 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle state) {
     super.onCreate(state);
     store = ((CleanerApp) getApplication()).store;
+    compactLevel = getPreferences(MODE_PRIVATE).getInt("compactLevel", 1);
     LinearLayout screen = column();
     screen.setPadding(0, 0, 0, 0);
     screen.setBackgroundColor(CANVAS);
@@ -101,6 +106,9 @@ public final class MainActivity extends Activity {
     pageTitle.setTextSize(28);
     pageTitle.setTypeface(null, Typeface.BOLD);
     pageDescription = label(pageHeader, "Your library at a glance.");
+    reviewSummary = label(pageHeader, "");
+    reviewSummary.setTextSize(13);
+    reviewSummary.setTextColor(GREEN);
     screen.addView(pageHeader);
     LinearLayout live = column();
     live.setPadding(dp(20), 0, dp(20), dp(6));
@@ -184,7 +192,7 @@ public final class MainActivity extends Activity {
     primary(start);
     pause = button(actions, "Save checkpoint", () -> saveCheckpoint(false));
     resume = button(actions, "Resume", () -> start(true));
-    button(body, "Save checkpoint and close", () -> saveCheckpoint(true));
+    danger(button(body, "Save checkpoint and shut down", () -> saveCheckpoint(true)));
     label(
         body,
         "Completed files and selections are saved automatically in app storage. Resume revalidates"
@@ -192,7 +200,7 @@ public final class MainActivity extends Activity {
             + " uninstall or Clear storage.");
     button(body, "Review matches found so far", () -> switchPage("Review"));
     body = card(pageBody("Review"));
-    heading(body, "Matches found so far", 22);
+    heading(body, "Review options", 20);
     label(
         body,
         "Choose what to keep. Matches update while scanning; Android confirms every move to"
@@ -205,6 +213,29 @@ public final class MainActivity extends Activity {
             android.R.layout.simple_spinner_dropdown_item,
             List.of("All matches", "Exact duplicates only", "Similar media only")));
     body.addView(filter);
+    label(body, "Compact level");
+    Spinner compact = new Spinner(this);
+    compact.setAdapter(
+        new ArrayAdapter<>(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            List.of("Comfortable", "Compact", "Very compact")));
+    compact.setSelection(compactLevel);
+    body.addView(compact);
+    compact.setOnItemSelectedListener(
+        new AdapterView.OnItemSelectedListener() {
+          public void onNothingSelected(AdapterView<?> parent) {}
+
+          public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            if (compactLevel == position) return;
+            compactLevel = position;
+            getPreferences(MODE_PRIVATE).edit().putInt("compactLevel", position).apply();
+            groupStamps.clear();
+            stamp = "";
+            lastGridWidth = -1;
+            if (groups != null) refresh();
+          }
+        });
     label(body, "Sort groups");
     Spinner sort = new Spinner(this);
     sort.setAdapter(
@@ -241,9 +272,15 @@ public final class MainActivity extends Activity {
         "Batch cleanup includes reviewed groups across all pages of this filter. Review each"
             + " group's keeper before including it.");
     batchDelete = button(body, "Delete selected across groups", () -> preview(null));
+    body = pageBody("Review");
+    heading(body, "Matches found so far", 22);
+    label(body, "Green · Keep    Red · Delete selected");
     emptyGroups = label(body, "");
-    groups = column();
-    body.addView(groups);
+    groups = new GridLayout(this);
+    groups.setColumnCount(1);
+    groups.setUseDefaultMargins(false);
+    groups.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> layoutGroups());
+    body.addView(groups, new LinearLayout.LayoutParams(-1, -2));
     groupCount = label(body, "");
     button(
         body,
@@ -286,7 +323,7 @@ public final class MainActivity extends Activity {
             + " restore availability depend on your device.");
     LinearLayout session = card(settings);
     heading(session, "Session", 20);
-    button(session, "Save checkpoint and close", () -> saveCheckpoint(true));
+    danger(button(session, "Save checkpoint and shut down", () -> saveCheckpoint(true)));
     String selectedPage = state == null ? "Dashboard" : state.getString("page", "Dashboard");
     switchPage(selectedPage);
     if (getIntent().getBooleanExtra("fixtureScan", false)
@@ -329,6 +366,7 @@ public final class MainActivity extends Activity {
   private void switchPage(String name) {
     if (!pages.containsKey(name)) name = "Dashboard";
     currentPage = name;
+    reviewSummary.setVisibility(name.equals("Review") ? View.VISIBLE : View.GONE);
     for (Map.Entry<String, ScrollView> page : pages.entrySet())
       page.getValue().setVisibility(page.getKey().equals(name) ? View.VISIBLE : View.GONE);
     for (Map.Entry<String, Button> tab : navigation.entrySet()) {
@@ -465,11 +503,11 @@ public final class MainActivity extends Activity {
     }
     if (closeAfter) {
       new AlertDialog.Builder(this)
-          .setTitle("Save checkpoint and close?")
+          .setTitle("Save checkpoint and shut down?")
           .setMessage(
               "Pause scanning and save completed work before closing the app. Use Resume after"
                   + " reopening. Unfinished files will be checked again.")
-          .setPositiveButton("Save and close", (dialog, which) -> awaitCheckpoint(true))
+          .setPositiveButton("Save and shut down", (dialog, which) -> awaitCheckpoint(true))
           .setNegativeButton("Cancel", null)
           .show();
     } else awaitCheckpoint(false);
@@ -598,7 +636,7 @@ public final class MainActivity extends Activity {
   private void refresh() {
     if (progress == null || isDestroyed()) return;
     boolean active = ScanService.running.get();
-    String status = store.meta("status", "ready");
+    String status = sentence(store.meta("status", "ready"));
     access.setText(
         !hasAccess()
             ? "No media access. Allow access to scan."
@@ -651,6 +689,25 @@ public final class MainActivity extends Activity {
             + (active ? "Groups may still update while scanning." : "Saved results.");
     for (TextView indicator : reviewProgress) indicator.setText(reviewStatus);
     batchDelete.setEnabled(!cleanupBusy);
+    Set<String> allFiles = new HashSet<>(), selectedFiles = new HashSet<>();
+    List<Store.Group> filteredGroups = store.groups(Integer.MAX_VALUE, groupFilter, groupSort);
+    for (Store.Group group : filteredGroups)
+      for (Media file : group.files()) {
+        allFiles.add(file.uri);
+        if (!store.keep(group, file)) selectedFiles.add(file.uri);
+      }
+    reviewSummary.setText(
+        filteredGroups.size()
+            + " groups · "
+            + selectedFiles.size()
+            + " / "
+            + allFiles.size()
+            + " files selected · "
+            + switch (groupFilter) {
+              case "EXACT_DUPLICATE" -> "Exact duplicates";
+              case "SIMILAR_CONTENT" -> "Similar media";
+              default -> "All matches";
+            });
     List<Store.Group> found = store.groups(limit, groupFilter, groupSort);
     StringBuilder identity = new StringBuilder();
     for (Store.Group group : found) {
@@ -707,9 +764,47 @@ public final class MainActivity extends Activity {
         groups.addView(card, i);
       }
     }
+    lastGridWidth = -1;
+    layoutGroups();
     groupCount.setText(
         "Showing " + found.size() + " of " + store.groupCount(groupFilter) + " matching groups");
     renderHistory();
+  }
+
+  private String sentence(String value) {
+    return value.isEmpty()
+        ? value
+        : value.substring(0, 1).toUpperCase(Locale.ROOT) + value.substring(1);
+  }
+
+  private void danger(Button view) {
+    view.setTextColor(Color.WHITE);
+    view.setBackground(
+        new RippleDrawable(ColorStateList.valueOf(0xffa52a25), surface(0xffbb342d, 0), null));
+  }
+
+  private void styleFile(LinearLayout item, boolean keep) {
+    item.setBackground(surface(keep ? 0xffe6f2e8 : 0xffffe5e2, keep ? 0xff9abb9f : 0xffd99c96));
+  }
+
+  private void layoutGroups() {
+    int width = groups.getWidth();
+    if (width <= 0 || (width == lastGridWidth && groups.getChildCount() == lastGridCount)) return;
+    lastGridWidth = width;
+    lastGridCount = groups.getChildCount();
+    int minimum = dp(new int[] {360, 300, 250}[compactLevel]);
+    int columns = Math.max(1, Math.min(3, width / minimum));
+    groups.setColumnCount(Math.max(columns, groups.getColumnCount()));
+    for (int i = 0; i < groups.getChildCount(); i++) {
+      GridLayout.LayoutParams params =
+          new GridLayout.LayoutParams(
+              GridLayout.spec(i / columns, GridLayout.TOP), GridLayout.spec(i % columns));
+      params.width = width / columns - dp(12);
+      params.height = -2;
+      params.setMargins(dp(6), dp(6), dp(6), dp(10));
+      groups.getChildAt(i).setLayoutParams(params);
+    }
+    groups.setColumnCount(columns);
   }
 
   private CheckBox selection(LinearLayout parent, Store.Group group, Media file) {
@@ -726,6 +821,7 @@ public final class MainActivity extends Activity {
             check.setChecked(!selected);
             message(failure.getMessage());
           }
+          styleFile(parent, store.keep(group, file));
           stamp = "";
           refresh();
         });
@@ -738,7 +834,8 @@ public final class MainActivity extends Activity {
     view.setContentDescription("Thumbnail of " + file.name);
     view.setScaleType(ImageView.ScaleType.FIT_CENTER);
     view.setBackgroundColor(0xffedf2e9);
-    parent.addView(view, new LinearLayout.LayoutParams(-1, dp(180)));
+    parent.addView(
+        view, new LinearLayout.LayoutParams(-1, dp(new int[] {180, 128, 88}[compactLevel])));
     view.setOnClickListener(ignored -> open.run());
     String key = file.identity;
     view.setTag(key);
@@ -767,8 +864,9 @@ public final class MainActivity extends Activity {
     LinearLayout card = column();
     card.setPadding(dp(12), dp(12), dp(12), dp(12));
     card.setBackground(surface(Color.WHITE, BORDER));
-    LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
-    cardParams.bottomMargin = dp(16);
+    GridLayout.LayoutParams cardParams = new GridLayout.LayoutParams();
+    cardParams.width = -1;
+    cardParams.height = -2;
     card.setLayoutParams(cardParams);
     heading(
         card,
@@ -848,12 +946,14 @@ public final class MainActivity extends Activity {
 
   private void renderMembers(LinearLayout parent, Store.Group group, int count) {
     for (Media file : group.files().subList(0, Math.min(count, group.files().size()))) {
-      selection(parent, group, file);
-      thumbnail(parent, file, () -> open(group.id(), file.uri));
-      label(
-          parent, file.name + " · " + String.format(Locale.ROOT, "%.1f MB", file.size / 1048576.0));
-      if (!file.warning.isEmpty()) label(parent, file.warning);
-      if (!file.protection.isEmpty()) label(parent, file.protection);
+      LinearLayout item = card(parent);
+      styleFile(item, store.keep(group, file));
+      selection(item, group, file);
+      label(item, store.keep(group, file) ? "Keep" : "Delete selected");
+      thumbnail(item, file, () -> open(group.id(), file.uri));
+      label(item, file.name + " · " + String.format(Locale.ROOT, "%.1f MB", file.size / 1048576.0));
+      if (!file.warning.isEmpty()) label(item, file.warning);
+      if (!file.protection.isEmpty()) label(item, file.protection);
     }
   }
 
@@ -927,6 +1027,7 @@ public final class MainActivity extends Activity {
           next.setEnabled(index[0] + 1 < files.size());
           selected.setChecked(current != null && !store.keep(current, file));
           selected.setEnabled(current != null && file.protection.isEmpty() && !cleanupBusy);
+          styleFile(body, !selected.isChecked());
           selected.setOnClickListener(
               view -> {
                 try {
@@ -935,6 +1036,9 @@ public final class MainActivity extends Activity {
                   selected.setChecked(!selected.isChecked());
                   message(failure.getMessage());
                 }
+                styleFile(body, !selected.isChecked());
+                stamp = "";
+                refresh();
               });
           video.stopPlayback();
           videoZoom[0] = 1;
@@ -1079,19 +1183,21 @@ public final class MainActivity extends Activity {
               return;
             }
             for (Media file : videos.subList(page[0], end)) {
-              selection(cards, latest, file);
-              label(cards, file.name);
-              if (!file.protection.isEmpty()) label(cards, file.protection);
+              LinearLayout videoCard = card(cards);
+              styleFile(videoCard, store.keep(latest, file));
+              selection(videoCard, latest, file);
+              label(videoCard, file.name);
+              if (!file.protection.isEmpty()) label(videoCard, file.protection);
               VideoView video = new VideoView(MainActivity.this);
               players.add(video);
-              cards.addView(video, new LinearLayout.LayoutParams(-1, dp(210)));
+              videoCard.addView(video, new LinearLayout.LayoutParams(-1, dp(210)));
               MediaController controller = new MediaController(MainActivity.this);
               controller.setAnchorView(video);
               video.setMediaController(controller);
               android.media.MediaPlayer[] audio = {null};
               CheckBox sound = new CheckBox(MainActivity.this);
               sound.setText("Audio: " + file.name);
-              cards.addView(sound);
+              videoCard.addView(sound);
               sound.setOnCheckedChangeListener(
                   (button, enabled) -> {
                     if (audio[0] != null) audio[0].setVolume(enabled ? 1 : 0, enabled ? 1 : 0);
@@ -1303,6 +1409,7 @@ public final class MainActivity extends Activity {
     for (int i = 0; i < items.length(); i++) {
       JSONObject item = items.optJSONObject(i);
       LinearLayout itemCard = card(body);
+      styleFile(itemCard, false);
       heading(itemCard, item.optString("name"), 16);
       String key = item.optString("group", plan.optString("group"));
       if (displayed.add(key)) {
@@ -1540,7 +1647,7 @@ public final class MainActivity extends Activity {
       String status = operation.optString("status");
       label(
           card,
-          status
+          sentence(status)
               + " · "
               + operation.optJSONArray("items").length()
               + " files · "

@@ -258,7 +258,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     navigate("Review")
     tap(find("Thumbnail of trip.png", scroll=True, timeout=35))
     find("Close preview")
-    find("completed")  # Progress stays visible inside the review dialog.
+    find("Completed")  # Progress stays visible inside the review dialog.
     tap(find("Zoom in"))
     tap(find("Fit to screen"))
     tap(find("Previous", button=True))
@@ -331,7 +331,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     screenshot("android-trash-confirmation.png")
     tap(find("Allow", timeout=20, button=True))
     navigate("Cleanup")
-    find("trashed ·", scroll=True, timeout=30)
+    find("Trashed ·", scroll=True, timeout=30)
     assert "clip-reencoded.mp4" not in adb("shell", "ls", gallery).splitlines()
     assert "clip-original.mp4" not in adb("shell", "ls", gallery).splitlines()
     assert "trip.png" not in adb("shell", "ls", gallery).splitlines()
@@ -343,7 +343,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     tap(find("Restore from Trash", button=True))
     tap(find("Continue"))
     tap(find("Allow", timeout=20, button=True))
-    find("restored ·", scroll=True, timeout=30)
+    find("Restored ·", scroll=True, timeout=30)
     assert "clip-reencoded.mp4" in adb("shell", "ls", gallery).splitlines()
     assert "clip-original.mp4" in adb("shell", "ls", gallery).splitlines()
     assert "trip.png" in adb("shell", "ls", gallery).splitlines()

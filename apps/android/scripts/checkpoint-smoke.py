@@ -56,8 +56,8 @@ def tap(node):
 
 def close_at_checkpoint():
     tap(find("Settings", button=True))
-    tap(find("Save checkpoint and close", button=True))
-    tap(find("Save and close", button=True))
+    tap(find("Save checkpoint and shut down", button=True))
+    tap(find("Save and shut down", button=True))
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         if not any(node.get("package") == PACKAGE for node in tree().iter("node")):
