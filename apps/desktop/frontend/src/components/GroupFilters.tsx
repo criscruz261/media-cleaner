@@ -37,9 +37,9 @@ export function GroupFilters({
             onChange(event.target.value as GroupFilter, sort)
           }
         >
-          <option value="">All matches</option>
-          <option value="EXACT_DUPLICATE">Exact duplicates only</option>
-          <option value="SIMILAR_CONTENT">Similar media only</option>
+          <option value="">▦ All matches</option>
+          <option value="EXACT_DUPLICATE">= Exact duplicates only</option>
+          <option value="SIMILAR_CONTENT">≈ Similar media only</option>
         </select>
       </label>
       <label>
@@ -49,10 +49,10 @@ export function GroupFilters({
           value={sort}
           onChange={(event) => onChange(classification, event.target.value)}
         >
-          <option value="discovered">Discovery order</option>
-          <option value="exact_first">Exact duplicates first</option>
-          <option value="largest">Most recoverable space</option>
-          <option value="most_files">Most files</option>
+          <option value="discovered">↓ Discovery order</option>
+          <option value="exact_first">= Exact duplicates first</option>
+          <option value="largest">↓ Most recoverable space</option>
+          <option value="most_files">▤ Most files</option>
         </select>
       </label>
       <label>
@@ -62,11 +62,11 @@ export function GroupFilters({
           value={compact}
           onChange={(event) => setCompact(Number(event.target.value))}
         >
-          <option value={1}>1 · Spacious</option>
-          <option value={2}>2 · Balanced</option>
-          <option value={3}>3 · Compact</option>
-          <option value={4}>4 · Very compact</option>
-          <option value={5}>5 · Most compact</option>
+          <option value={1}>▁ 1 · Spacious</option>
+          <option value={2}>▂ 2 · Balanced</option>
+          <option value={3}>▃ 3 · Compact</option>
+          <option value={4}>▄ 4 · Very compact</option>
+          <option value={5}>▅ 5 · Most compact</option>
         </select>
       </label>
       <p className="hint">
