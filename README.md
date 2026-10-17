@@ -12,6 +12,15 @@ The project-local Python environment and production frontend have been prepared:
 ./run.sh
 ```
 
+After changing the desktop code, stop the running app, rebuild, then launch it again:
+
+```sh
+./build-desktop.sh
+./run.sh
+```
+
+The build script refreshes frontend dependencies from the lockfile and compiles the production UI served by `run.sh`. Python source changes are loaded when the backend restarts. This does not create a packaged desktop installer; rerun `./scripts/setup.sh` when Python dependencies change.
+
 Open the launch link printed in the terminal. It includes a local access token in the URL fragment, which is removed after connecting and exchanged for an HttpOnly, SameSite cookie. Do not share the launch link. Stop with Ctrl+C. Use `./run.sh --port 9000` or `./run.sh --data-dir /absolute/local/app-data` to override defaults.
 
 To clean up multiple groups on desktop, make your selections in **Matches found so far** or **Review**, then choose **Delete selected across groups**. The combined preview includes reviewed groups across every page of the selected scan and requires confirmation before moving files.

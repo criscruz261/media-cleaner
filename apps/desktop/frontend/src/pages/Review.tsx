@@ -44,13 +44,25 @@ export function Review({
   });
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading review-heading">
         <div>
           <div className="eyebrow">Less guesswork, more control</div>
           <h1>Review the repeats.</h1>
           <p>Exact copies and similar media. You decide what stays.</p>
+          <p className="review-heading-note">
+            <ShieldCheck size={14} aria-hidden="true" />
+            Review similar matches before selecting files. Protected originals
+            stay safe.
+          </p>
         </div>
       </div>
+      {scanId && (
+        <BatchCleanup
+          scanId={scanId}
+          onPlan={onPlan}
+          classification={classification}
+        />
+      )}
       <GroupFilters
         classification={classification}
         sort={sort}
@@ -60,7 +72,7 @@ export function Review({
           setOffset(0);
         }}
       >
-        <label>
+        <label className="review-scan-selector">
           Choose a scan
           <select
             aria-label="Choose scan to review"
@@ -80,23 +92,6 @@ export function Review({
           </select>
         </label>
       </GroupFilters>
-      <div className="notice">
-        <ShieldCheck size={18} />
-        <p>
-          Exact copies and approximate media matches are labeled separately.
-          Similar groups start with no files selected for deletion. A file may
-          appear in both an exact and a similar group. Copy-name recommendations
-          are advisory. RAW originals, protected folders, and potential
-          photo/video companions stay protected.
-        </p>
-      </div>
-      {scanId && (
-        <BatchCleanup
-          scanId={scanId}
-          onPlan={onPlan}
-          classification={classification}
-        />
-      )}
       {!scanId ? (
         <Empty title="Choose a scan to review">
           <button onClick={() => navigate("Scanner")}>

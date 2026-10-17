@@ -1244,6 +1244,33 @@ footer span:last-child {
   font-weight: 400;
 }
 
+.page-heading.review-heading {
+  margin-bottom: 12px;
+}
+.review-heading .eyebrow {
+  margin-bottom: 5px;
+  letter-spacing: 1px;
+}
+.review-heading h1 {
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.7px;
+  margin-bottom: 4px;
+}
+.review-heading p {
+  line-height: 1.5;
+}
+.review-heading .review-heading-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.review-heading-note svg {
+  flex-shrink: 0;
+}
+
 .scanner-page .page-heading {
   margin-bottom: 12px;
 }
@@ -2176,9 +2203,9 @@ footer span:last-child {
 .group-toolbar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
-  gap: 10px 14px;
+  gap: 6px 10px;
   align-items: end;
-  padding: 12px;
+  padding: 9px 10px;
   margin: 12px 0;
   border: 1px solid var(--border);
   border-radius: 10px;
