@@ -282,21 +282,9 @@ export function Scanner({
           <section className="panel">
             <div className="section-heading">
               <h2>Current scan</h2>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={showThumbnails}
-                  onChange={(event) => setShowThumbnails(event.target.checked)}
-                />
-                Show processing thumbnails
-              </label>
               <span className="badge">{displayLabel(scan.data.status)}</span>
             </div>
             <p>{displayLabel(scan.data.stage)}</p>
-            {showThumbnails && !!scan.data.activity?.length && (
-              <ActivityThumbnails activity={scan.data.activity} />
-            )}
-
             <p className="file-path">{scan.data.options?.roots?.join(" · ")}</p>
             {scan.data.stage === "discovery" ? (
               <>
@@ -449,6 +437,46 @@ export function Scanner({
                 </p>
               </div>
             </details>
+            <section
+              className={`processing-preview${showThumbnails ? "" : " processing-preview-off"}`}
+              style={{
+                height: showThumbnails ? undefined : "auto",
+                width: showThumbnails ? undefined : "100%",
+              }}
+              aria-label="Processing previews"
+            >
+              <div className="processing-preview-control">
+                <span id="processing-preview-label">
+                  Show processing thumbnails
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showThumbnails}
+                  aria-labelledby="processing-preview-label"
+                  className="processing-preview-switch"
+                  onClick={() => setShowThumbnails((value) => !value)}
+                >
+                  <span className="processing-preview-switch-thumb" />
+                </button>
+              </div>
+              {showThumbnails && (
+                <small className="processing-preview-resize-hint">
+                  Drag the bottom-right corner to resize
+                </small>
+              )}
+              {showThumbnails &&
+                (scan.data.activity?.length ? (
+                  <ActivityThumbnails activity={scan.data.activity} />
+                ) : (
+                  <p className="hint processing-preview-empty">
+                    {active
+                      ? "Thumbnails appear as files are processed."
+                      : "No files are being processed."}
+                  </p>
+                ))}
+            </section>
+
             <div className="actions">
               {active ? (
                 <>

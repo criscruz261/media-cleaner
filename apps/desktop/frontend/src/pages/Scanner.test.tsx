@@ -84,7 +84,7 @@ it("toggles processing thumbnails in Current scan and remembers the preference",
       name: "Processing current.jpg",
     });
     expect(image).toHaveAttribute("src", "/api/v1/files/file/thumbnail");
-    const toggle = screen.getByRole("checkbox", {
+    const toggle = screen.getByRole("switch", {
       name: "Show processing thumbnails",
     });
     fireEvent.click(toggle);

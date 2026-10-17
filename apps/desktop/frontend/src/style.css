@@ -1527,6 +1527,7 @@ footer span:last-child {
 
 .activity-thumbnails {
   display: flex;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 10px;
   margin: 12px 0;
@@ -1614,4 +1615,117 @@ footer span:last-child {
   .sidebar-bottom {
     margin-top: 12px;
   }
+}
+
+.processing-preview {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.processing-preview-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.processing-preview-switch {
+  width: 40px;
+  height: 24px;
+  min-width: 40px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: #78837b;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.processing-preview-switch:hover {
+  background: #667169;
+}
+.processing-preview-switch[aria-checked="true"] {
+  background: var(--green);
+}
+.processing-preview-switch[aria-checked="true"]:hover {
+  background: #244c38;
+}
+.processing-preview-switch-thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  transform: translateX(0);
+  transition: transform 150ms ease;
+}
+.processing-preview-switch[aria-checked="true"]
+  .processing-preview-switch-thumb {
+  transform: translateX(16px);
+}
+.processing-preview-empty {
+  text-align: center;
+  margin-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .processing-preview-switch-thumb {
+    transition: none;
+  }
+}
+
+.processing-preview {
+  resize: both;
+  overflow: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: min(260px, 100%);
+  height: 180px;
+  min-height: 180px;
+  max-height: min(480px, 80dvh);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  container-type: size;
+}
+.processing-preview-control {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.processing-preview-resize-hint {
+  display: block;
+  text-align: center;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 6px;
+}
+.processing-preview .activity-thumbnails {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  align-content: flex-start;
+}
+.processing-preview .activity-thumbnail {
+  width: clamp(100px, min(100cqw, calc(147cqh - 135px)), 480px);
+  max-width: 100%;
+  flex-shrink: 0;
+}
+.processing-preview .activity-thumbnail-image {
+  height: auto;
+  aspect-ratio: 28 / 19;
+}
+.processing-preview .activity-thumbnail-image img {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+
+.processing-preview.processing-preview-off {
+  resize: none;
+  container-type: normal;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  min-width: 0;
+  padding-block: 8px;
 }
