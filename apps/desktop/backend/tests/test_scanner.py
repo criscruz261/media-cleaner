@@ -162,3 +162,42 @@ def test_system_trash_and_empty_media_are_always_excluded(client, workspace):
         assert groups[0]["member_count"] == 2
     job = scan(client, [workspace / "$RECYCLE.BIN"], include_hidden=True)
     assert job["discovered"] == 0
+
+
+def test_thumbnail_available_for_active_file_before_analysis_is_ready(client, workspace, monkeypatch):
+    from threading import Event
+    from PIL import Image
+    from app.database.models import File
+
+    Image.new("RGB", (80, 60), "green").save(workspace / "processing.png")
+    manager = client.app.state.manager
+    original = manager.process_file
+    entered, release = Event(), Event()
+    selected = []
+    def controlled(scan_id, file_id, checkpoint):
+        with manager.sessions() as session:
+            file = session.get(File, file_id)
+            path = file.path
+        selected.append(file_id)
+        manager.update_activity(scan_id, file_id, path=path, phase="metadata", size=1,
+                                bytes_done=0, frames_done=0, frames_total=0)
+        entered.set()
+        assert release.wait(5)
+        return original(scan_id, file_id, checkpoint)
+    monkeypatch.setattr(manager, "process_file", controlled)
+    job = client.post("/api/v1/scans", json={"roots": [str(workspace)]}).json()
+    try:
+        assert entered.wait(5)
+        file_id = selected[0]
+        assert client.get(f"/api/v1/files/{file_id}").json()["status"] == "discovered"
+        activity = client.get(f"/api/v1/scans/{job['id']}").json()["activity"]
+        assert activity[0]["file_id"] == file_id
+        url = f"/api/v1/files/{file_id}/thumbnail"
+        response = client.get(url)
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"] == "image/jpeg"
+        manager.clear_activity(job["id"], file_id)
+        assert client.get(url).status_code == 404
+    finally:
+        release.set()
+        manager.active.result(timeout=5)

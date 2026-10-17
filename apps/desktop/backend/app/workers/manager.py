@@ -54,7 +54,7 @@ class JobManager:
 
     def update_activity(self, scan_id, file_id, **values):
         with self.activity_lock:
-            self.activities.setdefault((scan_id, file_id), {}).update(values)
+            self.activities.setdefault((scan_id, file_id), {"file_id": file_id}).update(values)
 
     def clear_activity(self, scan_id, file_id):
         with self.activity_lock:

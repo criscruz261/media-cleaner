@@ -498,7 +498,12 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
 
         with sessions() as session:
             file = session.get(File, file_id)
-            if not file or file.status != "ready":
+            if not file:
+                raise HTTPException(404, "Media unavailable")
+            processing = file.status == "discovered" and any(
+                item.get("file_id") == file_id for item in manager.activity(file.scan_id)
+            )
+            if file.status != "ready" and not processing:
                 raise HTTPException(404, "Media unavailable")
             path, expected = Path(file.path), stored_identity(file)
             if identity(path) != expected:

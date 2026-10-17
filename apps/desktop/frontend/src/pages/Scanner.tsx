@@ -1,3 +1,4 @@
+import { ActivityThumbnails } from "../components/ActivityThumbnails";
 import { ScannerResetContext } from "../components/ScannerResetContext";
 import { ScanWorkflow } from "../components/ScanWorkflow";
 import { useState, useEffect, useContext } from "react";
@@ -43,6 +44,17 @@ export function Scanner({
       navigate("Scanner");
     }
   };
+  const [showThumbnails, setShowThumbnails] = useState(() => {
+    try {
+      return localStorage.getItem("media-cleaner.scan-thumbnails") !== "false";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(
+    () => saveLocal("media-cleaner.scan-thumbnails", showThumbnails),
+    [showThumbnails],
+  );
   const [draft] = useState(loadDraft);
   const [roots, setRoots] = useState(draft.roots),
     [excluded, setExcluded] = useState(draft.excluded),
@@ -270,9 +282,21 @@ export function Scanner({
           <section className="panel">
             <div className="section-heading">
               <h2>Current scan</h2>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={showThumbnails}
+                  onChange={(event) => setShowThumbnails(event.target.checked)}
+                />
+                Show processing thumbnails
+              </label>
               <span className="badge">{scan.data.status}</span>
             </div>
             <p>{scan.data.stage.replaceAll("_", " ")}</p>
+            {showThumbnails && !!scan.data.activity?.length && (
+              <ActivityThumbnails activity={scan.data.activity} />
+            )}
+
             <p className="file-path">{scan.data.options?.roots?.join(" · ")}</p>
             {scan.data.stage === "discovery" ? (
               <>

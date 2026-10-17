@@ -10,6 +10,7 @@ export type Scan = {
   checkpoint_at?: string;
   checkpoint_storage?: { database: string; folder_caches: string[] };
   activity?: {
+    file_id?: string;
     path: string;
     phase: string;
     bytes_done: number;

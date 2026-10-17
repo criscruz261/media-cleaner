@@ -319,28 +319,21 @@ export function App() {
                   </button>
                 ))}
               </nav>
-              <div className="sidebar-note">
-                <LockKeyhole size={20} />
-                <strong>Your media stays yours.</strong>
-                <p>
-                  Local analysis. No uploads.
-                  <br />
-                  No account required.
-                </p>
-                <span>
-                  <i /> Running on this computer
-                </span>
-              </div>
-              <div className="sidebar-footer">
-                PHASE 3 <span>v0.1.0</span>
-              </div>
-            </aside>
-            <div className="workspace">
-              <header>
-                <div>
-                  <span className="muted">Workspace</span>
-                  <span className="breadcrumb">/</span>
-                  {page === "Review" ? "Duplicate review" : page}
+              <div className="sidebar-bottom">
+                <div className="sidebar-note">
+                  <LockKeyhole size={20} />
+                  <strong>Your media stays yours.</strong>
+                  <p>
+                    Local analysis. No uploads.
+                    <br />
+                    No account required.
+                  </p>
+                  <span>
+                    <i /> Running on this computer
+                  </span>
+                </div>
+                <div className="sidebar-footer">
+                  PHASE 3 <span>v0.1.0</span>
                 </div>
                 <ShutdownControl
                   onStopped={() => {
@@ -350,6 +343,15 @@ export function App() {
                     setStopped(true);
                   }}
                 />
+              </div>
+            </aside>
+            <div className="workspace">
+              <header>
+                <div>
+                  <span className="muted">Workspace</span>
+                  <span className="breadcrumb">/</span>
+                  {page === "Review" ? "Duplicate review" : page}
+                </div>
                 <span className="local-badge">
                   <span /> Local & private
                 </span>
