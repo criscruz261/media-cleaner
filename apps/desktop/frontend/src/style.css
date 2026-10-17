@@ -1051,3 +1051,52 @@ footer span:last-child {
     padding: 8px;
   }
 }
+
+.sticky-review-progress {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.review-scan-progress {
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.review-scan-progress progress {
+  width: 160px;
+  max-width: 100%;
+}
+.review-scan-progress span {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+
+.video-compare-modal .review-scan-progress {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.cleanup-dialog {
+  width: min(850px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  background: var(--surface);
+  padding: 20px;
+  border-radius: 12px;
+}
+.cleanup-dialog-close {
+  position: sticky;
+  top: 0;
+  float: right;
+  z-index: 1;
+}
+.cleanup-dialog .cleanup-plan {
+  margin-top: 20px;
+}

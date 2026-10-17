@@ -1,7 +1,7 @@
 import { BatchCleanup } from "./BatchCleanup";
 import { GroupCard } from "../pages/Review";
 import type { Cleanup } from "../types/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers3, ShieldCheck, ArrowRight } from "lucide-react";
 import { api } from "../services/api";
@@ -31,6 +31,9 @@ export function LiveMatches({
       api<Matches>(`/scans/${scanId}/matches?offset=${offset}&limit=6`),
     refetchInterval: running ? 1000 : false,
   });
+  useEffect(() => {
+    if (status === "completed") void matches.refetch();
+  }, [status, scanId]);
   return (
     <section className="panel" aria-label="Live matches">
       <div className="section-heading">

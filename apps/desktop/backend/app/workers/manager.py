@@ -37,6 +37,9 @@ class JobManager:
         self.shutdown_event = threading.Event()
         self.lock = threading.RLock()
         self.active = None
+        self.active_id = None
+        self.stopping = False
+        self.checkpointing = set()
         self.activity_lock = threading.Lock()
         self.activities = {}
         self.matcher_dirty = False
@@ -59,8 +62,13 @@ class JobManager:
 
     def start(self, scan_id: str):
         with self.lock:
+            if self.stopping:
+                raise ValueError("App shutdown is in progress")
+            if scan_id in self.checkpointing:
+                raise ValueError("Checkpoint is still being saved")
             if self.active and not self.active.done():
                 raise ValueError("Another scan is active; pause or cancel it first")
+            self.active_id = scan_id
             self.active = self.executor.submit(self.run, scan_id)
 
     def checkpoint(self, scan_id: str):
@@ -519,6 +527,36 @@ class JobManager:
                     if warning not in metadata.warnings:
                         metadata.warnings = list(metadata.warnings) + [warning]
                         session.commit()
+
+    def pause_at_checkpoint(self, scan_id):
+        with self.lock, self.sessions.begin() as session:
+            job = session.get(ScanJob, scan_id)
+            if not job or job.status not in {"queued", "running", "paused", "interrupted"}:
+                raise ValueError("This scan cannot be paused at a checkpoint")
+            self.checkpointing.add(scan_id)
+            job.status, job.stage, job.updated_at = "paused", "Saving checkpoint", now()
+            active = self.active if self.active_id == scan_id else None
+        try:
+            # The coordinator may need the lock while its workers unwind.
+            if active:
+                active.result()
+            with self.sessions.begin() as session:
+                job = session.get(ScanJob, scan_id)
+                job.stage, job.updated_at = "Checkpoint saved; ready to resume", now()
+        finally:
+            with self.lock:
+                self.checkpointing.discard(scan_id)
+
+    def prepare_shutdown(self):
+        with self.lock:
+            self.stopping = True
+            with self.sessions.begin() as session:
+                for job in session.scalars(select(ScanJob).where(ScanJob.status.in_(["running", "queued"]))):
+                    job.status, job.stage, job.updated_at = "paused", "Saving checkpoint for shutdown", now()
+        self.close()
+        with self.sessions.begin() as session:
+            for job in session.scalars(select(ScanJob).where(ScanJob.status == "paused")):
+                job.stage, job.updated_at = "Checkpoint saved; resume after reopening the app", now()
 
     def close(self):
         self.shutdown_event.set()

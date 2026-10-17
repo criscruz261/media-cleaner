@@ -227,6 +227,8 @@ def test_backend_restart_reuses_durable_completed_file_checkpoints(client, works
     with client.app.state.sessions.begin() as session:
         # Model an existing 0003 database: migration must import reviewed group choices.
         session.execute(text("DROP TABLE file_review_choices"))
+        session.execute(text("DROP INDEX ix_duplicate_groups_first_seen_at"))
+        session.execute(text("ALTER TABLE duplicate_groups DROP COLUMN first_seen_at"))
         session.execute(text("UPDATE alembic_version SET version_num='0003'"))
         session.get(ScanJob, job["id"]).status = "running"
         database_path = session.bind.url.database
@@ -298,3 +300,125 @@ def test_rebuilt_groups_restore_late_members_without_overwriting_new_choices(cli
         }
     finally:
         matcher.close()
+
+
+def test_groups_append_on_first_publication_not_update_time(client, workspace):
+    from conftest import scan
+    from app.database.models import DuplicateGroup
+
+    job = scan(client, [workspace])
+
+    def group(count=2, status="unreviewed"):
+        return DuplicateGroup(
+            scan_id=job["id"],
+            evidence={},
+            recommendation="Test",
+            recoverable=1,
+            member_count=count,
+            review_status=status,
+        )
+
+    with client.app.state.sessions.begin() as session:
+        pending = group(1, "pending")
+        session.add(pending)
+        session.flush()
+        assert pending.first_seen_at is None
+        first = group()
+        session.add(first)
+        session.flush()
+        original_time = first.first_seen_at
+        second = group()
+        session.add(second)
+        session.flush()
+        first.updated_at = "2999-01-01T00:00:00+00:00"
+        first.recoverable = 999999
+        session.flush()
+        assert first.first_seen_at == original_time
+        pending.member_count = 2
+        pending.review_status = "unreviewed"
+        session.flush()
+        expected = [first.id, second.id, pending.id]
+    for url in (f"/api/v1/scans/{job['id']}/matches", f"/api/v1/groups?scan_id={job['id']}"):
+        assert [row["id"] for row in client.get(url).json()["items"]] == expected
+        separator = "&" if "?" in url else "?"
+        page = client.get(url + separator + "offset=1&limit=1").json()
+        assert [row["id"] for row in page["items"]] == [expected[1]]
+
+
+def test_checkpoint_waits_for_worker_and_shutdown_preserves_resumable_scan(client, workspace, monkeypatch):
+    import time
+    from unittest.mock import Mock
+    from sqlalchemy import select
+    from app.database.models import File
+
+    for name, content in [("a.mp4", b"video"), ("a copy.mp4", b"video"), ("waiting.mp4", b"later")]:
+        (workspace / name).write_bytes(content)
+    manager = client.app.state.manager
+    original = manager.process_file
+    waiting = threading.Event()
+
+    def controlled(scan_id, file_id, checkpoint):
+        with manager.sessions() as session:
+            name = session.get(File, file_id).name
+        if name == "waiting.mp4":
+            waiting.set()
+            while True:
+                checkpoint()
+                time.sleep(0.01)
+        return original(scan_id, file_id, checkpoint)
+
+    monkeypatch.setattr(manager, "process_file", controlled)
+    job = client.post("/api/v1/scans", json={"roots": [str(workspace)]}).json()
+    assert waiting.wait(5)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if client.get(f"/api/v1/scans/{job['id']}").json()["processed"] >= 2:
+            break
+        time.sleep(0.01)
+    response = client.post(f"/api/v1/scans/{job['id']}/checkpoint", json={})
+    assert response.status_code == 200, response.text
+    assert manager.active.done()
+    assert response.json()["status"] == "paused"
+    assert response.json()["processed"] == 2
+    assert "Checkpoint saved" in response.json()["stage"]
+    waiting.clear()
+    assert client.post(f"/api/v1/scans/{job['id']}/resume").status_code == 200
+    assert waiting.wait(5)
+    assert not manager.active.done()
+    callback = Mock()
+    client.app.state.shutdown_callback = callback
+    assert client.post("/api/v1/app/shutdown", json={"confirmed": False}).status_code == 400
+    assert not manager.stopping
+    response = client.post("/api/v1/app/shutdown", json={"confirmed": True})
+    assert response.status_code == 200, response.text
+    assert response.json()["checkpoint_saved"]
+    callback.assert_called_once()
+    assert manager.active.done()
+    assert client.post(f"/api/v1/scans/{job['id']}/resume").status_code == 503
+    with client.app.state.sessions() as session:
+        path = session.bind.url.database
+        assert (
+            len(session.scalars(select(File).where(File.scan_id == job["id"], File.status == "ready")).all())
+            == 2
+        )
+    from pathlib import Path
+
+    rehashed = []
+
+    def resumed_hash(path, expected, checkpoint, progress=None):
+        rehashed.append(path.name)
+        assert path.name == "waiting.mp4", "Completed checkpoints must not be hashed again"
+        return real_hash(path, expected, checkpoint, progress)
+
+    monkeypatch.setattr("app.workers.manager.hash_file", resumed_hash)
+    restarted = create_app(Path(path).parent, token="restart")
+    with TestClient(
+        restarted, base_url="http://127.0.0.1:8765", headers={"Authorization": "Bearer restart"}
+    ) as reopened:
+        assert reopened.get(f"/api/v1/scans/{job['id']}").json()["status"] == "paused"
+        assert reopened.post(f"/api/v1/scans/{job['id']}/resume").status_code == 200
+        wait_worker(reopened)
+        state = reopened.get(f"/api/v1/scans/{job['id']}").json()
+        assert state["status"] == "completed", state
+        assert state["processed"] == 3
+        assert rehashed == ["waiting.mp4"]

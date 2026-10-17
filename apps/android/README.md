@@ -79,3 +79,7 @@ Large groups are limited in visible UI, and comparison uses four players per pag
 Screenshots are written to ignored `.tools/android/smoke`. Do not point tests at personal media or a physical device. The existing desktop app and Windows files remain separate under `apps/desktop`.
 
 Tap a group thumbnail to open a screen-fitting preview. **Previous/Next** navigates the full group, **Select for deletion** saves the same choice used by group and batch cleanup, and **Fit to screen** resets zoom. Photos support pinch zoom and drag panning as well as zoom buttons. Videos play in the preview with playback controls. Navigation resets zoom and stops the previous video.
+
+New matching groups append at the end in first-seen order. Updates replace only the changed group card, preserving unaffected cards and expanded groups. Scan progress remains pinned above the scrolling results and appears inside photo/video review dialogs, with a reminder that groups may change during scanning.
+
+**Save checkpoint** waits for the scanner to pause and finish saving completed work. **Resume** rechecks access and continues using unchanged completed files. **Save checkpoint and close** asks for confirmation, waits for the checkpoint, stops the scan service, and closes the app task. Resolve any pending Trash/restore confirmation before using this action.

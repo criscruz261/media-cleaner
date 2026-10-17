@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
-from sqlalchemy import ForeignKey, Index, UniqueConstraint, JSON, String
+from sqlalchemy import ForeignKey, Index, UniqueConstraint, JSON, String, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -98,6 +98,7 @@ class FileHash(Base):
 
 
 class DuplicateGroup(Base):
+    first_seen_at: Mapped[str | None] = mapped_column(index=True)
     __tablename__ = "duplicate_groups"
     updated_at: Mapped[str] = mapped_column(default=now, index=True)
     id: Mapped[str] = mapped_column(primary_key=True, default=uid)
@@ -162,3 +163,14 @@ class FileReviewChoice(Base):
     file_id: Mapped[str] = mapped_column(ForeignKey("files.id"), primary_key=True)
     classification: Mapped[str] = mapped_column(primary_key=True)
     keep: Mapped[bool]
+
+
+@event.listens_for(DuplicateGroup, "before_insert")
+@event.listens_for(DuplicateGroup, "before_update")
+def record_first_publication(mapper, connection, group):
+    if (
+        group.first_seen_at is None
+        and group.member_count > 1
+        and group.review_status not in {"pending", "resolved"}
+    ):
+        group.first_seen_at = now()

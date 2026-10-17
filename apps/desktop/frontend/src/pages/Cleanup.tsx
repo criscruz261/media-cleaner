@@ -7,9 +7,11 @@ import { Empty, ErrorMessage, Pagination } from "../components/ui";
 export function Cleanup({
   plan,
   onComplete,
+  embedded = false,
 }: {
   plan: CleanupPlan | null;
-  onComplete: () => void;
+  onComplete: (result?: CleanupPlan) => void;
+  embedded?: boolean;
 }) {
   const [confirmed, setConfirmed] = useState(false),
     [offset, setOffset] = useState(0);
@@ -18,6 +20,7 @@ export function Cleanup({
     queryKey: ["cleanup-history", offset],
     queryFn: () =>
       api<Page<CleanupPlan>>(`/cleanup/history?offset=${offset}&limit=10`),
+    enabled: !embedded,
   });
   const execute = useMutation({
     mutationFn: () =>
@@ -26,8 +29,8 @@ export function Cleanup({
         token: plan?.token,
         confirmed,
       }),
-    onSuccess: () => {
-      onComplete();
+    onSuccess: (result) => {
+      onComplete(result);
       setConfirmed(false);
       client.invalidateQueries();
     },
@@ -39,13 +42,15 @@ export function Cleanup({
   });
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">A SECOND LOOK, BEFORE YOU CLEAN</div>
-          <h1>Make room, safely.</h1>
-          <p>Review every move. Keep a recovery record.</p>
+      {!embedded && (
+        <div className="page-heading">
+          <div>
+            <div className="eyebrow">A SECOND LOOK, BEFORE YOU CLEAN</div>
+            <h1>Make room, safely.</h1>
+            <p>Review every move. Keep a recovery record.</p>
+          </div>
         </div>
-      </div>
+      )}
       {plan && (
         <section className="panel cleanup-plan">
           <div className="section-heading">
@@ -120,65 +125,67 @@ export function Cleanup({
           <ErrorMessage error={execute.error} />
         </section>
       )}
-      {!plan && (
+      {!embedded && !plan && (
         <Empty title="Nothing queued for cleanup">
           Uncheck unwanted files in Duplicate Review, then choose Preview
           cleanup.
         </Empty>
       )}
-      <section className="panel">
-        <h2>Cleanup & recovery history</h2>
-        <p className="muted">
-          Restore quarantined files here. For Trash operations, use your
-          operating system’s Trash / Recycle Bin.
-        </p>
-        {history.data?.items.map((operation) => (
-          <details className="operation" key={operation.id}>
-            <summary>
-              {new Date(operation.created_at).toLocaleString()} ·{" "}
-              {operation.items.length} files · {operation.destination}{" "}
-              <span className="badge">{operation.status}</span>
-            </summary>
-            {operation.items.map((item) => (
-              <div className="operation-item" key={item.file_id}>
-                <p>{item.source}</p>
-                <small>
-                  {item.status}
-                  {item.quarantine_path
-                    ? ` · Recovery: ${item.quarantine_path}`
-                    : ""}
-                </small>
-                {item.error && <p className="error">{item.error}</p>}
-              </div>
-            ))}
-            {operation.destination === "quarantine" &&
-              ["completed", "partial", "interrupted"].includes(
-                operation.status,
-              ) && (
-                <button
-                  disabled={restore.isPending}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Restore quarantined files to their original paths? Existing files will not be overwritten.",
+      {!embedded && (
+        <section className="panel">
+          <h2>Cleanup & recovery history</h2>
+          <p className="muted">
+            Restore quarantined files here. For Trash operations, use your
+            operating system’s Trash / Recycle Bin.
+          </p>
+          {history.data?.items.map((operation) => (
+            <details className="operation" key={operation.id}>
+              <summary>
+                {new Date(operation.created_at).toLocaleString()} ·{" "}
+                {operation.items.length} files · {operation.destination}{" "}
+                <span className="badge">{operation.status}</span>
+              </summary>
+              {operation.items.map((item) => (
+                <div className="operation-item" key={item.file_id}>
+                  <p>{item.source}</p>
+                  <small>
+                    {item.status}
+                    {item.quarantine_path
+                      ? ` · Recovery: ${item.quarantine_path}`
+                      : ""}
+                  </small>
+                  {item.error && <p className="error">{item.error}</p>}
+                </div>
+              ))}
+              {operation.destination === "quarantine" &&
+                ["completed", "partial", "interrupted"].includes(
+                  operation.status,
+                ) && (
+                  <button
+                    disabled={restore.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Restore quarantined files to their original paths? Existing files will not be overwritten.",
+                        )
                       )
-                    )
-                      restore.mutate(operation.id);
-                  }}
-                >
-                  <Undo2 size={14} /> Restore quarantined files
-                </button>
-              )}
-          </details>
-        ))}
-        <ErrorMessage error={history.error || restore.error} />
-        <Pagination
-          offset={offset}
-          total={history.data?.total ?? 0}
-          size={10}
-          onChange={setOffset}
-        />
-      </section>
+                        restore.mutate(operation.id);
+                    }}
+                  >
+                    <Undo2 size={14} /> Restore quarantined files
+                  </button>
+                )}
+            </details>
+          ))}
+          <ErrorMessage error={history.error || restore.error} />
+          <Pagination
+            offset={offset}
+            total={history.data?.total ?? 0}
+            size={10}
+            onChange={setOffset}
+          />
+        </section>
+      )}
     </>
   );
 }

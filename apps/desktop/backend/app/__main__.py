@@ -16,7 +16,9 @@ def main():
     application = create_app(directory, token=token)
     print(f"Open http://127.0.0.1:{args.port}/#token={token}", flush=True)
     print("The launch token grants access to your local library. Keep this link private.", flush=True)
-    uvicorn.run(application, host="127.0.0.1", port=args.port, access_log=False)
+    server = uvicorn.Server(uvicorn.Config(application, host="127.0.0.1", port=args.port, access_log=False))
+    application.state.shutdown_callback = lambda: setattr(server, "should_exit", True)
+    server.run()
 
 
 if __name__ == "__main__":

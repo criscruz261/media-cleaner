@@ -28,6 +28,12 @@ public final class MainActivity extends Activity {
         }
       };
   private LinearLayout groups, history;
+  private final Map<String, LinearLayout> groupCards = new LinkedHashMap<>();
+  private final Map<String, String> groupStamps = new HashMap<>();
+  private final Set<String> expandedGroups = new HashSet<>();
+  private final List<TextView> reviewProgress = new ArrayList<>();
+  private TextView groupCount, emptyGroups;
+  private Button batchDelete;
   private TextView progress, activity, access;
   private ProgressBar bar;
   private Spinner albums;
@@ -35,6 +41,7 @@ public final class MainActivity extends Activity {
   private String stamp = "";
   private int limit = 5;
   private boolean cleanupBusy = false;
+  private boolean checkpointBusy = false;
   private Dialog comparison;
   private static final int PERMISSIONS = 10, TRASH = 20, RESTORE = 21;
   private final Runnable tick =
@@ -50,15 +57,16 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle state) {
     super.onCreate(state);
     store = ((CleanerApp) getApplication()).store;
+    LinearLayout screen = column();
+    setContentView(screen);
     ScrollView scroll = new ScrollView(this);
     LinearLayout body = column();
     scroll.addView(body);
-    setContentView(scroll);
     body.setBackgroundColor(0xfff7f8f5);
-    body.setOnApplyWindowInsetsListener(
+    screen.setOnApplyWindowInsetsListener(
         (view, insets) -> {
           android.graphics.Insets edges = insets.getInsets(WindowInsets.Type.systemBars());
-          body.setPadding(
+          screen.setPadding(
               dp(16) + edges.left, dp(18) + edges.top, dp(16) + edges.right, dp(24) + edges.bottom);
           return insets;
         });
@@ -76,12 +84,14 @@ public final class MainActivity extends Activity {
     LinearLayout actions = row();
     body.addView(actions);
     start = button(actions, "Scan", () -> start(false));
-    pause = button(actions, "Pause", () -> ScanService.paused.set(true));
+    pause = button(actions, "Save checkpoint", () -> saveCheckpoint(false));
     resume = button(actions, "Resume", () -> start(true));
-    progress = label(body, "");
+    button(body, "Save checkpoint and close", () -> saveCheckpoint(true));
+    progress = label(screen, "");
     bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-    body.addView(bar);
-    activity = label(body, "");
+    screen.addView(bar);
+    activity = label(screen, "");
+    screen.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
     label(
         body,
         "Completed files and selections are saved automatically in app storage. Resume revalidates"
@@ -90,10 +100,14 @@ public final class MainActivity extends Activity {
     heading(body, "Matches found so far", 22);
     label(
         body,
-        "Select unwanted files for deletion. Keep at least one file per group. Android asks for"
-            + " confirmation before moving anything to Trash.");
+        "Select unwanted files for deletion. New groups are appended; existing groups may gain"
+            + " files while scanning. Android asks for confirmation before moving anything to"
+            + " Trash.");
+    batchDelete = button(body, "Delete selected across groups", () -> preview(null));
+    emptyGroups = label(body, "");
     groups = column();
     body.addView(groups);
+    groupCount = label(body, "");
     button(
         body,
         "Show more groups",
@@ -178,6 +192,48 @@ public final class MainActivity extends Activity {
     return view;
   }
 
+  private void saveCheckpoint(boolean closeAfter) {
+    if (cleanupBusy || checkpointBusy || !store.meta("pendingOperation", "").isEmpty()) {
+      message("Finish or cancel the pending cleanup before saving a checkpoint or closing.");
+      return;
+    }
+    if (closeAfter) {
+      new AlertDialog.Builder(this)
+          .setTitle("Save checkpoint and close?")
+          .setMessage(
+              "Pause scanning and save completed work before closing the app. Use Resume after"
+                  + " reopening. Unfinished files will be checked again.")
+          .setPositiveButton("Save and close", (dialog, which) -> awaitCheckpoint(true))
+          .setNegativeButton("Cancel", null)
+          .show();
+    } else awaitCheckpoint(false);
+  }
+
+  private void awaitCheckpoint(boolean closeAfter) {
+    checkpointBusy = true;
+    ScanService.paused.set(true);
+    activity.setText("Saving checkpoint; waiting for the scanner to stop…");
+    io.submit(
+        () -> {
+          try {
+            while (ScanService.running.get()) Thread.sleep(50);
+            store.put("activity", "Checkpoint saved. Resume to continue from completed files.");
+            store.touch();
+            runOnUiThread(
+                () -> {
+                  checkpointBusy = false;
+                  refresh();
+                  if (closeAfter) {
+                    stopService(new Intent(this, ScanService.class));
+                    finishAndRemoveTask();
+                  } else message("Checkpoint saved. You can resume now or reopen the app later.");
+                });
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+          }
+        });
+  }
+
   private void message(String text) {
     if (!isDestroyed())
       new AlertDialog.Builder(this)
@@ -250,6 +306,10 @@ public final class MainActivity extends Activity {
   }
 
   private void start(boolean restore) {
+    if (checkpointBusy) {
+      message("Checkpoint is still being saved.");
+      return;
+    }
     if (!store.meta("pendingOperation", "").isEmpty()) {
       message(
           "Resolve the pending cleanup request in Cleanup and recovery before starting a scan.");
@@ -281,10 +341,11 @@ public final class MainActivity extends Activity {
                     && !granted(Manifest.permission.READ_MEDIA_VIDEO)
                 ? "Selected media access: only items you allowed will be scanned."
                 : "Scanning is limited to the media access granted by Android.");
-    start.setEnabled(!active && !cleanupBusy);
-    resume.setEnabled(!active && !cleanupBusy && !store.meta("status", "").isEmpty());
-    pause.setEnabled(active && !ScanService.paused.get());
-    albums.setEnabled(!active && !cleanupBusy);
+    start.setEnabled(!active && !cleanupBusy && !checkpointBusy);
+    resume.setEnabled(
+        !active && !cleanupBusy && !checkpointBusy && !store.meta("status", "").isEmpty());
+    pause.setEnabled(active && !ScanService.paused.get() && !checkpointBusy);
+    albums.setEnabled(!active && !cleanupBusy && !checkpointBusy);
     int total = Integer.parseInt(store.meta("total", "0")),
         done = Integer.parseInt(store.meta("processed", "0"));
     progress.setText(
@@ -300,7 +361,19 @@ public final class MainActivity extends Activity {
             + " errors");
     bar.setMax(Math.max(1, total));
     bar.setProgress(done);
-    activity.setText(store.meta("activity", "Choose media access, then Scan."));
+    activity.setText(
+        (active ? "Scanning continues; groups may still update. " : "")
+            + store.meta("activity", "Choose media access, then Scan."));
+    String reviewStatus =
+        status
+            + " · "
+            + done
+            + " / "
+            + total
+            + " files · "
+            + (active ? "Groups may still update while scanning." : "Saved results.");
+    for (TextView indicator : reviewProgress) indicator.setText(reviewStatus);
+    batchDelete.setEnabled(!cleanupBusy);
     List<Store.Group> found = store.groups(limit);
     StringBuilder identity = new StringBuilder();
     for (Store.Group group : found) {
@@ -315,21 +388,42 @@ public final class MainActivity extends Activity {
     identity.append(store.operations().toString()).append(cleanupBusy).append(limit);
     if (stamp.equals(identity.toString())) return;
     stamp = identity.toString();
-    groups.removeAllViews();
-    if (found.isEmpty())
-      label(
-          groups,
-          active
-              ? "Matches appear as soon as files are compared."
-              : "No matching groups yet. Run a scan to compare accessible media.");
-    Button batch = button(groups, "Delete selected across groups", () -> preview(null));
-    batch.setEnabled(!cleanupBusy);
-    label(
-        groups,
-        "Includes selections in reviewed groups, including groups outside this page. Unreviewed"
-            + " suggestions are excluded.");
-    for (Store.Group group : found) renderGroup(group);
-    label(groups, "Showing " + found.size() + " of " + store.groupCount() + " groups");
+    emptyGroups.setVisibility(found.isEmpty() ? View.VISIBLE : View.GONE);
+    emptyGroups.setText(
+        active
+            ? "Matches appear as soon as files are compared."
+            : "No matching groups yet. Run a scan to compare accessible media.");
+    Set<String> visible = new HashSet<>();
+    for (Store.Group group : found) {
+      visible.add(group.id());
+      StringBuilder version =
+          new StringBuilder(group.recommended() == null ? "" : group.recommended())
+              .append(cleanupBusy);
+      for (Media file : group.files())
+        version
+            .append(file.uri)
+            .append(file.identity)
+            .append(store.keep(group, file))
+            .append(file.warning)
+            .append(file.protection);
+      if (!version.toString().equals(groupStamps.get(group.id()))) {
+        LinearLayout old = groupCards.get(group.id());
+        int position = old == null ? groups.getChildCount() : groups.indexOfChild(old);
+        if (old != null) groups.removeView(old);
+        LinearLayout card = renderGroup(group);
+        groups.addView(card, position);
+        groupCards.put(group.id(), card);
+        groupStamps.put(group.id(), version.toString());
+      }
+    }
+    for (String id : new ArrayList<>(groupCards.keySet())) {
+      if (!visible.contains(id)) {
+        groups.removeView(groupCards.remove(id));
+        groupStamps.remove(id);
+        expandedGroups.remove(id);
+      }
+    }
+    groupCount.setText("Showing " + found.size() + " of " + store.groupCount() + " groups");
     renderHistory();
   }
 
@@ -384,10 +478,9 @@ public final class MainActivity extends Activity {
         });
   }
 
-  private void renderGroup(Store.Group group) {
+  private LinearLayout renderGroup(Store.Group group) {
     LinearLayout card = column();
     card.setBackgroundColor(0xffffffff);
-    groups.addView(card);
     heading(
         card,
         (group.classification().equals("EXACT_DUPLICATE") ? "Exact copies" : "Similar media")
@@ -406,12 +499,13 @@ public final class MainActivity extends Activity {
       button(card, "Compare similar videos", () -> compare(group.id()));
     LinearLayout members = column();
     card.addView(members);
-    renderMembers(members, group, 4);
+    renderMembers(members, group, expandedGroups.contains(group.id()) ? 50 : 4);
     if (group.files().size() > 4)
       button(
           card,
           "Show all " + group.files().size() + " files",
           () -> {
+            expandedGroups.add(group.id());
             members.removeAllViews();
             renderMembers(members, group, Math.min(group.files().size(), 50));
             if (group.files().size() > 50)
@@ -442,6 +536,7 @@ public final class MainActivity extends Activity {
             + selected
             + ")");
     delete.setEnabled(selected > 0 && !cleanupBusy);
+    return card;
   }
 
   private void renderMembers(LinearLayout parent, Store.Group group, int count) {
@@ -463,6 +558,8 @@ public final class MainActivity extends Activity {
     for (int i = 0; i < files.size(); i++) if (files.get(i).uri.equals(initialUri)) index[0] = i;
     Dialog dialog = new Dialog(this);
     LinearLayout body = column();
+    TextView scanStatus = label(body, progress.getText() + " · Groups may update while scanning.");
+    reviewProgress.add(scanStatus);
     TextView title = label(body, "");
     LinearLayout navigation = new LinearLayout(this);
     body.addView(navigation);
@@ -593,6 +690,7 @@ public final class MainActivity extends Activity {
     dialog.setOnDismissListener(
         ignored -> {
           video.stopPlayback();
+          reviewProgress.remove(scanStatus);
           stamp = "";
           refresh();
         });
@@ -614,6 +712,9 @@ public final class MainActivity extends Activity {
     LinearLayout content = column();
     scroll.addView(content);
     heading(content, "Compare similar videos", 22);
+    TextView scanStatus =
+        label(content, progress.getText() + " · Groups may update while scanning.");
+    reviewProgress.add(scanStatus);
     label(
         content,
         "Starts muted. Unmute individual videos to compare audio. Up to four players per page;"
@@ -729,6 +830,7 @@ public final class MainActivity extends Activity {
         ignored -> {
           for (VideoView player : players) player.stopPlayback();
           comparison = null;
+          reviewProgress.remove(scanStatus);
           stamp = "";
           refresh();
         });

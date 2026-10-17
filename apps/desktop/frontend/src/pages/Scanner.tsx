@@ -326,7 +326,7 @@ export function Scanner({
                 <>
                   <button
                     disabled={control.isPending}
-                    onClick={() => control.mutate("pause")}
+                    onClick={() => control.mutate("checkpoint")}
                   >
                     <Pause size={15} /> Pause
                   </button>

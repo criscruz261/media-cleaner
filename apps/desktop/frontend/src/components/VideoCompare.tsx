@@ -1,3 +1,4 @@
+import { ScanProgress } from "./ScanProgress";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, Pause, RotateCcw } from "lucide-react";
@@ -5,7 +6,13 @@ import { api, prefix } from "../services/api";
 import type { Group, MediaFile } from "../types/api";
 import { ErrorMessage } from "./ui";
 
-export function VideoCompare({ groupId }: { groupId: string }) {
+export function VideoCompare({
+  groupId,
+  scanId,
+}: {
+  groupId: string;
+  scanId?: string;
+}) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   return (
@@ -21,16 +28,18 @@ export function VideoCompare({ groupId }: { groupId: string }) {
       >
         <Play size={15} /> Compare videos together
       </button>
-      {open && <Comparison groupId={groupId} close={close} />}
+      {open && <Comparison groupId={groupId} scanId={scanId} close={close} />}
     </>
   );
 }
 
 function Comparison({
   groupId,
+  scanId,
   close,
 }: {
   groupId: string;
+  scanId?: string;
   close: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
@@ -131,6 +140,7 @@ function Comparison({
         aria-modal="true"
         aria-label="Compare similar videos"
       >
+        {scanId && <ScanProgress scanId={scanId} />}
         <div className="section-heading">
           <h2>Compare similar videos</h2>
           <button onClick={close}>Close comparison</button>

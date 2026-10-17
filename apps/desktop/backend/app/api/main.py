@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import json
 from pathlib import Path
 import secrets
-from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi import FastAPI, Request, HTTPException, Query, BackgroundTasks
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -72,6 +72,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
         openapi_url=None,
     )
     app.state.sessions, app.state.manager, app.state.cleanup = sessions, manager, cleanup
+    app.state.shutdown_callback = None
 
     @app.middleware("http")
     async def local_access(request: Request, call_next):
@@ -101,6 +102,12 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                     {"error": {"code": "origin_rejected", "message": "Local origin required"}},
                     status_code=403,
                 )
+            if (
+                manager.stopping
+                and request.method not in {"GET", "HEAD"}
+                and request.url.path != "/api/v1/app/shutdown"
+            ):
+                return JSONResponse({"error": {"message": "App shutdown is in progress"}}, status_code=503)
             if request.method in {"POST", "PUT"}:
                 body = bytearray()
                 async for chunk in request.stream():
@@ -231,6 +238,8 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 roots.append(root)
         options["roots"] = [str(root) for root in roots]
         with manager.lock:
+            if manager.stopping:
+                raise ValueError("App shutdown is in progress")
             if manager.active and not manager.active.done():
                 raise ValueError("Another scan is active")
             with sessions.begin() as session:
@@ -280,7 +289,12 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
 
     @app.post("/api/v1/scans/{scan_id}/{action}")
     def control_scan(scan_id: str, action: str):
+        if action == "checkpoint":
+            manager.pause_at_checkpoint(scan_id)
+            return get_scan(scan_id)
         with manager.lock:
+            if manager.stopping:
+                raise ValueError("App shutdown is in progress")
             with sessions.begin() as session:
                 job = session.get(ScanJob, scan_id)
                 if not job:
@@ -314,7 +328,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             rows = [
                 record(group)
                 for group in session.scalars(
-                    query.order_by(DuplicateGroup.updated_at.desc(), DuplicateGroup.id)
+                    query.order_by(DuplicateGroup.first_seen_at, DuplicateGroup.id)
                     .offset(offset)
                     .limit(limit)
                 )
@@ -478,7 +492,9 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "items": [
                     record(group)
                     for group in session.scalars(
-                        query.order_by(DuplicateGroup.recoverable.desc()).offset(offset).limit(limit)
+                        query.order_by(DuplicateGroup.first_seen_at, DuplicateGroup.id)
+                        .offset(offset)
+                        .limit(limit)
                     )
                 ],
                 "total": session.scalar(select(func.count()).select_from(query.subquery())),
@@ -545,6 +561,20 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
         for file_id in ids:
             manager.save_folder_cache(group.scan_id, file_id)
         return {"saved": True}
+
+    @app.post("/api/v1/app/shutdown")
+    def shutdown_app(value: RestoreRequest, background: BackgroundTasks):
+        if not value.confirmed:
+            raise ValueError("Confirm saving checkpoints and shutting down the app")
+        callback = app.state.shutdown_callback
+        if callback is None:
+            raise HTTPException(
+                503,
+                "This server does not support app shutdown. Stop it from its terminal after saving a checkpoint.",
+            )
+        manager.prepare_shutdown()
+        background.add_task(callback)
+        return {"status": "stopped", "checkpoint_saved": True}
 
     @app.post("/api/v1/cleanup/plan-selected", status_code=201)
     def plan_selected(value: SelectedPlanRequest):

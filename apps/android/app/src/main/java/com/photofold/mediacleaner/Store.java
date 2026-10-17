@@ -106,9 +106,11 @@ final class Store extends SQLiteOpenHelper {
           values.put("id", group.id);
           values.put("classification", group.classification);
           values.put("uris", uris.toString());
-          values.put("updated", System.currentTimeMillis());
-          // Do not replace manual choices; recommendations are applied only at completion.
-          db.insertWithOnConflict("groups", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+          // Keep the first-publication time and row ID when membership grows.
+          if (db.update("groups", values, "id=?", new String[] {group.id}) == 0) {
+            values.put("updated", System.currentTimeMillis());
+            db.insertOrThrow("groups", null, values);
+          }
         }
       put("processed", String.valueOf(processed));
       put("errors", String.valueOf(errors));
@@ -184,7 +186,7 @@ final class Store extends SQLiteOpenHelper {
     try (Cursor c =
         getReadableDatabase()
             .rawQuery(
-                "SELECT * FROM groups ORDER BY updated DESC,id LIMIT ?",
+                "SELECT * FROM groups ORDER BY updated ASC,rowid ASC LIMIT ?",
                 new String[] {String.valueOf(limit)})) {
       while (c.moveToNext()) {
         Group group = readGroup(c);

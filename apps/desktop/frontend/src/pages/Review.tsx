@@ -1,7 +1,7 @@
-import { GroupPreview } from "../components/GroupPreview";
+import { GroupPreview, PreviewContext } from "../components/GroupPreview";
 import { BatchCleanup } from "../components/BatchCleanup";
 import { VideoCompare } from "../components/VideoCompare";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldCheck, ArrowRight, Layers3 } from "lucide-react";
 import { api, bytes } from "../services/api";
@@ -29,6 +29,7 @@ export function Review({
     queryFn: () =>
       api<Page<Group>>(`/groups?scan_id=${scanId}&offset=${offset}&limit=10`),
     enabled: !!scanId,
+    refetchInterval: 1000,
   });
   return (
     <>
@@ -111,6 +112,7 @@ export function GroupCard({
   selectForDeletion?: boolean;
   live?: boolean;
 }) {
+  const openPreview = useContext(PreviewContext);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0),
     [destination, setDestination] = useState<"trash" | "quarantine">("trash");
@@ -171,6 +173,7 @@ export function GroupCard({
         <GroupPreview
           groupId={group.id}
           initialId={previewId}
+          scanId={group.scan_id}
           onClose={() => setPreviewId(null)}
         />
       )}
@@ -193,7 +196,7 @@ export function GroupCard({
         <strong>{bytes(group.recoverable)} potential</strong>
       </div>
       {detail.data?.files.some((file) => file.media_type === "video") && (
-        <VideoCompare groupId={group.id} />
+        <VideoCompare groupId={group.id} scanId={group.scan_id} />
       )}
       <p className="recommendation">{group.recommendation}</p>
       <details className="evidence">
@@ -279,7 +282,11 @@ export function GroupCard({
               <MediaPreview
                 file={file}
                 thumbnailFirst={thumbnailFirst}
-                onOpen={() => setPreviewId(file.id)}
+                onOpen={() =>
+                  openPreview
+                    ? openPreview(group.id, file.id, group.scan_id)
+                    : setPreviewId(file.id)
+                }
               />
               <strong className="filename">{file.name}</strong>
               <p className="file-path">{file.path}</p>

@@ -39,3 +39,9 @@ List responses are `{items,total}` with `offset`/`limit`, except the observed-vo
 The `similar` mode now compares still photos/RAW and video/animation sequences. Sequence evidence includes `media_kind:sequence`, sample counts, duration difference, algorithm version and limitations. It remains approximate and requires manual review; no audio equality is asserted.
 
 `POST /api/v1/cleanup/plan-selected` takes `scan_id` and `destination` (`trash` or `quarantine`). It previews saved removal choices from reviewed groups across the entire scan, deduplicates files, and excludes untouched recommendations. The same token, expiry, fresh validation and explicit `/cleanup/execute` confirmation apply. Limit: 1,000 files per plan.
+
+`GET /groups` and `GET /scans/{id}/matches` return groups in stable first-publication order (`first_seen_at`, then ID). A pending single-file group receives its timestamp only when it becomes a visible match; later membership updates do not move it ahead of other results.
+
+`POST /scans/{id}/checkpoint` pauses a scan and waits for its worker to stop before returning the saved checkpoint. Resume with `POST /scans/{id}/resume`. The legacy `/pause` action requests a pause without waiting.
+
+`POST /app/shutdown` requires `{"confirmed":true}`. It prevents new work, waits for active cleanup, pauses active scans, joins scan workers, commits checkpoint state, then requests graceful server shutdown after sending the response. Available for the server launched through `./run.sh`; custom hosts must provide a shutdown callback. The frontend stops polling and displays a safe-to-close page.

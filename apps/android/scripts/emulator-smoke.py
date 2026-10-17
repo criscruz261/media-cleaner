@@ -42,6 +42,7 @@ def tree():
 
 def find(text, timeout=15, scroll=False, button=False):
     deadline = time.monotonic() + timeout
+    direction, previous_tree = 1, None
     while time.monotonic() < deadline:
         root = tree()
         matches = [
@@ -60,7 +61,12 @@ def find(text, timeout=15, scroll=False, button=False):
         if matches:
             return matches[0]
         if scroll:
-            adb("shell", "input", "swipe", "550", "1950", "550", "650", "350")
+            current_tree = ET.tostring(root)
+            if current_tree == previous_tree:
+                direction *= -1
+            previous_tree = current_tree
+            start, end = ("1950", "650") if direction == 1 else ("650", "1950")
+            adb("shell", "input", "swipe", "550", start, "550", end, "350")
         time.sleep(0.4)
     raise AssertionError(f"Missing UI: {text}")
 
@@ -235,6 +241,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     launch()
     tap(find("Thumbnail of trip.png", scroll=True, timeout=35))
     find("Close preview")
+    find("completed")  # Progress stays visible inside the review dialog.
     tap(find("Zoom in"))
     tap(find("Fit to screen"))
     tap(find("Previous", button=True))

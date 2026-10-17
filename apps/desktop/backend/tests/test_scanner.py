@@ -76,7 +76,7 @@ def test_database_migration_wal_and_restart(tmp_path, workspace):
         with client.app.state.sessions() as session:
             assert session.execute(text("PRAGMA journal_mode")).scalar() == "wal"
             assert session.execute(text("PRAGMA foreign_keys")).scalar() == 1
-            assert session.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0004"
+            assert session.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0005"
             assert len(inspect(session.bind).get_table_names()) == 14  # 13 domain tables + migration version
     with TestClient(
         create_app(data, token="test"),
@@ -133,3 +133,32 @@ def test_thumbnails_are_cached_and_reject_changed_sources(client, workspace, mon
     assert client.get(url).status_code == 409
     assert client.get("/api/v1/files/missing/thumbnail").status_code == 404
     thumbnail.cache_clear()
+
+
+def test_system_trash_and_empty_media_are_always_excluded(client, workspace):
+    (workspace / "original.mp4").write_bytes(b"video")
+    (workspace / "original copy.mp4").write_bytes(b"video")
+    (workspace / "empty.mp4").touch()
+    (workspace / "empty copy.mp4").touch()
+    for directory in [
+        "$RECYCLE.BIN",
+        "$recycle.bin",
+        "RECYCLER",
+        "RECYCLED",
+        ".Trash",
+        ".Trashes",
+        ".Trash-1000",
+    ]:
+        trash = workspace / directory
+        trash.mkdir(exist_ok=True)
+        (trash / "deleted.mp4").write_bytes(b"video")
+        (trash / "empty.mp4").touch()
+    for hidden in (False, True):
+        job = scan(client, [workspace], include_hidden=hidden)
+        assert job["status"] == "completed", job
+        assert job["discovered"] == 2
+        groups = client.get(f"/api/v1/groups?scan_id={job['id']}").json()["items"]
+        assert len(groups) == 1
+        assert groups[0]["member_count"] == 2
+    job = scan(client, [workspace / "$RECYCLE.BIN"], include_hidden=True)
+    assert job["discovered"] == 0

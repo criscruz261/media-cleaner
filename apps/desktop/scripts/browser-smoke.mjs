@@ -71,11 +71,12 @@ try {
         .isDisabled())
     )
       throw new Error("Live cleanup bypassed confirmation");
-    await page.getByRole("checkbox").check();
+    await page.getByRole("dialog", { name: "Review and confirm deletion" }).getByRole("checkbox").check();
     await page.getByRole("button", { name: "Confirm cleanup" }).click();
     await page
-      .getByRole("heading", { name: "Nothing queued for cleanup" })
+      .getByRole("heading", { name: "Cleanup completed" })
       .waitFor();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     const state = await page.request.get(
       `http://127.0.0.1:${fixture.port}/api/v1/scans/${saved.scanId}`,
     );
@@ -231,11 +232,13 @@ try {
     !(await page.getByRole("button", { name: "Confirm cleanup" }).isDisabled())
   )
     throw new Error("Confirmation missing");
-  await page.getByRole("checkbox").check();
+  await page.getByRole("dialog", { name: "Review and confirm deletion" }).getByRole("checkbox").check();
   await page.getByRole("button", { name: "Confirm cleanup" }).click();
   await page
-    .getByRole("heading", { name: "Nothing queued for cleanup" })
+    .getByRole("heading", { name: "Cleanup completed" })
     .waitFor();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Cleanup", exact: true }).click();
   const operation = page.locator(".operation").first();
   await operation.locator("summary").click();
   await operation.getByText("moved", { exact: false }).waitFor();

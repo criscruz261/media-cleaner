@@ -1,17 +1,18 @@
 """Temporary-only synthetic browser fixture server; never accepts real media paths."""
 
 import json
-from pathlib import Path
+import random
 import secrets
+import subprocess
 import sys
 import tempfile
-from PIL import Image, ImageDraw
-import random
-import subprocess
 import time
-from app.core.media_tools import executable
+from pathlib import Path
+
 import uvicorn
 from app.api.main import create_app
+from app.core.media_tools import executable
+from PIL import Image, ImageDraw
 
 with tempfile.TemporaryDirectory(prefix="media-cleaner-smoke-") as directory:
     root = Path(directory).resolve()
@@ -88,6 +89,8 @@ with tempfile.TemporaryDirectory(prefix="media-cleaner-smoke-") as directory:
     release = root / "release"
     if live:
         (media / "waiting.MOV").write_bytes(b"waiting")
+        if "--append" in sys.argv:
+            (media / "earlier.MOV").write_bytes(b"waiting")
     token = secrets.token_urlsafe(32)
     config = {
         "live": live,
@@ -105,6 +108,7 @@ with tempfile.TemporaryDirectory(prefix="media-cleaner-smoke-") as directory:
     application = create_app(root / "data", token=token)
     if live:
         from app.database.models import File
+
         manager = application.state.manager
         process = manager.process_file
 
@@ -117,9 +121,10 @@ with tempfile.TemporaryDirectory(prefix="media-cleaner-smoke-") as directory:
             return process(scan_id, file_id, checkpoint)
 
         manager.process_file = controlled
-    uvicorn.run(
-        application,
-        host="127.0.0.1",
-        port=config["port"],
-        access_log=False,
+    server = uvicorn.Server(
+        uvicorn.Config(
+            application, host="127.0.0.1", port=config["port"], access_log=False
+        )
     )
+    application.state.shutdown_callback = lambda: setattr(server, "should_exit", True)
+    server.run()

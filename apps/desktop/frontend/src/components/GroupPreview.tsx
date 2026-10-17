@@ -1,18 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { ScanProgress } from "./ScanProgress";
+import { createContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, prefix } from "../services/api";
 import type { Group, MediaFile } from "../types/api";
 import { ErrorMessage } from "./ui";
 
+export const PreviewContext = createContext<
+  ((groupId: string, initialId: string, scanId: string) => void) | null
+>(null);
+
 export function GroupPreview({
   groupId,
   initialId,
   onClose,
+  scanId,
 }: {
   groupId: string;
   initialId: string;
   onClose: () => void;
+  scanId?: string;
 }) {
   const [currentId, setCurrentId] = useState(initialId);
   const [zoom, setZoom] = useState(1);
@@ -127,6 +134,7 @@ export function GroupPreview({
           }
         }}
       >
+        {scanId && <ScanProgress scanId={scanId} />}
         <div className="group-preview-toolbar">
           <button onClick={onClose}>Close preview</button>
           <button disabled={index <= 0} onClick={() => move(-1)}>
