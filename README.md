@@ -27,6 +27,9 @@ To clean up multiple groups on desktop, make your selections in **Matches found 
 
 ## Android build
 
+Numbered setup, build, device launch, and deployment packaging scripts are in
+`scripts/android/`. See the [Android script workflow](apps/android/README.md#numbered-scripts).
+
 A standalone Android 11+ app is available under [apps/android](apps/android/README.md), with native media access, offline scanning, thumbnails, video comparison, saved checkpoints and system-confirmed Trash/restore. On a fresh macOS Apple Silicon clone, install Python 3.12+ and curl, then run `./setup-android.sh` and `./build-android.sh`. Setup keeps its tools in ignored `.tools/android`; the build finds them automatically. Other hosts can configure JDK 21 and Android SDK 35 manually before running the build script. The installable debug APK is generated at `apps/android/app/build/outputs/apk/debug/app-debug.apk`. This is a testing build, not a Play Store release.
 
 ## Fresh development setup

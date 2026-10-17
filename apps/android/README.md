@@ -14,6 +14,32 @@ For multiple groups, make selections in each, then use **Delete selected across 
 6. Review the selected filenames and retained file (or the **Keep none** notice), check the confirmation box, then continue. The app freshly hashes selected files and their retained copy before opening Android's own Trash confirmation. Scanning pauses for this workflow and resumes afterward when it was running. Cancelling does not move files. There is no permanent-delete operation.
 7. **Cleanup and recovery** records the outcome and can request Android confirmation to restore items from Trash. Availability and retention are controlled by the device; gallery Trash is another recovery route. Rescan restored files to include them again.
 
+## Numbered scripts
+
+From the repository root:
+
+```sh
+./scripts/android/1-setup.sh
+./scripts/android/2-build.sh
+./scripts/android/3-run.sh emulator-5554
+./scripts/android/4-create-deploy-package.sh
+```
+
+Setup installs local tools on macOS Apple Silicon and discovers compatible
+Python automatically. It prompts for SDK licenses; optional `--emulator`
+installs emulator components. On other hosts configure JDK 21 and SDK 35 manually.
+Build runs matching tests, compiles the native app, and runs lint; Android has
+no separate frontend/backend builds. Run requires an explicit serial from
+`adb devices` and an already running emulator or connected, authorized phone.
+It installs the APK with `adb install -r` and launches the app. Start the optional
+test emulator separately using `./apps/android/scripts/emulator.sh`.
+
+Packaging rebuilds, verifies the APK signature, and publishes the debug APK,
+SHA-256 checksum, and installation README to `deployment-package/android/`.
+Transfer the APK to an Android 11+ device to install it. Build and packaging accept
+Gradle options such as `--offline`. Each script supports `--help`. Release
+signing and Play Store packaging are separate work.
+
 ## Build
 
 Open this directory in Android Studio, using **JDK 21**, SDK platform **35**, and build tools **35.0.0**. The pinned build uses AGP 8.9.2 and the checked-in Gradle 8.11.1 wrapper with a distribution checksum.
