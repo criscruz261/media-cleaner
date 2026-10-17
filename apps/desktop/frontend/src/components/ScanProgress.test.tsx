@@ -46,3 +46,47 @@ it("shows deletion counts for the active filter independently of the overall sca
     vi.unstubAllGlobals();
   }
 });
+
+it("stops an active scan using the safe stop action and keeps saved results visible", async () => {
+  let status = "running";
+  const fetch = vi.fn(async (url: string) => {
+    if (url.endsWith("/stop")) status = "cancelled";
+    return {
+      ok: true,
+      json: async () =>
+        url.includes("selection-summary")
+          ? { selected_files: 1, total_files: 2 }
+          : {
+              status,
+              stage:
+                status === "cancelled"
+                  ? "Scan stopped; completed results and checkpoints saved"
+                  : "metadata_and_hashing",
+              processed: 2,
+              discovered: 3,
+            },
+    };
+  });
+  vi.stubGlobal("fetch", fetch);
+  try {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ScanProgress scanId="scan" />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: "Pause & save checkpoint" });
+    fireEvent.click(screen.getByRole("button", { name: "Stop scan" }));
+    await screen.findByText("Scan cancelled · 2 / 3 files processed");
+    expect(
+      fetch.mock.calls.some(([url]) => url.endsWith("/scans/scan/stop")),
+    ).toBe(true);
+    expect(
+      screen.getByText(/Scan stopped. Saved results remain available/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Resume from checkpoint" }),
+    ).not.toBeInTheDocument();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

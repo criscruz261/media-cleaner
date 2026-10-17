@@ -14,6 +14,7 @@ All routes are under `/api/v1`. Authenticate with `Authorization: Bearer <launch
 | GET /scans/{id} | Job state, saved file/byte counters, checkpoint timestamp and current-file activity |
 | GET /scans/{id}/matches | Paginated live groups, exact/similar counts, provisional flag and checkpoint timestamp |
 | POST /scans/{id}/pause | Request checkpoint pause |
+| POST /scans/{id}/stop | Save completed checkpoints, wait for worker shutdown, and end the scan; saved results remain available |
 | POST /scans/{id}/cancel | Request checkpoint cancellation |
 | POST /scans/{id}/resume | Resume paused/interrupted/failed job when worker has stopped |
 | GET /scans/{id}/selection-summary | Distinct selected/total ready files in visible groups; optional classification filter, across all pages |
@@ -65,3 +66,5 @@ Explicit “Select all for deletion” authorization survives live group rebuild
 After confirmation, the desktop review window shows validation followed by deletion progress, polling `GET /cleanup/{id}/progress` every 400 ms while execution is pending. `processed` includes moved and failed files; validation is indeterminate until whole-plan checks finish. Progress reads do not take the cleanup execution lock. The final response displays completed/partial results and individual errors.
 
 The scan progress header also displays `selected_files / total_files` from the current group filter. `GET /scans/{id}/selection-summary?classification=EXACT_DUPLICATE|SIMILAR_CONTENT` returns these counts; omit classification for all matching groups. Both counts deduplicate overlapping group memberships and exclude unavailable/deleted files and resolved/pending groups. Selection eligibility matches batch cleanup (exact defaults plus manually reviewed similar selections). The current classification filter is shared between Scanner, Duplicate Review, and preview headers, and counts refresh after saved choices and cleanup.
+
+The progress header provides “Stop scan” beside “Pause & save checkpoint”. Pause allows resume; stop ends the scan (`cancelled`) after waiting for the worker to stop, retaining completed results and checkpoints. Start a new scan to scan again. Dashboard's “Clear dashboard view” is a local, reversible dismissal of displayed scan/cleanup entries and latest metrics; it does not remove server history, media, checkpoint caches, or recovery records. “Restore cleared entries” makes them visible again. New scan IDs appear normally.

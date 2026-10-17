@@ -72,7 +72,7 @@ export function ScanProgress({ scanId }: { scanId: string }) {
               disabled={busy}
               onClick={() => control.mutate("checkpoint")}
             >
-              {control.isPending
+              {control.isPending && control.variables === "checkpoint"
                 ? "Saving checkpoint…"
                 : "Pause & save checkpoint"}
             </button>
@@ -83,6 +83,17 @@ export function ScanProgress({ scanId }: { scanId: string }) {
               onClick={() => control.mutate("resume")}
             >
               Resume from checkpoint
+            </button>
+          )}
+          {(active || ["paused", "interrupted"].includes(value.status)) && (
+            <button
+              disabled={busy}
+              onClick={() => control.mutate("stop")}
+              title="End this scan after saving completed work. Results remain available; start a new scan to scan again."
+            >
+              {control.isPending && control.variables === "stop"
+                ? "Stopping & saving…"
+                : "Stop scan"}
             </button>
           )}
           {value.checkpoint_at && (
@@ -96,7 +107,9 @@ export function ScanProgress({ scanId }: { scanId: string }) {
               ? "Scanning continues. New groups appear at the end; existing groups may still gain files."
               : value.status === "completed"
                 ? "Scan complete."
-                : "Saved results. Groups may change when the scan resumes."}
+                : value.status === "cancelled"
+                  ? "Scan stopped. Saved results remain available; start a new scan to scan again."
+                  : "Saved results. Groups may change when the scan resumes."}
           </span>
         </>
       ) : (

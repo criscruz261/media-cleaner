@@ -1389,3 +1389,81 @@ footer span:last-child {
     flex-wrap: wrap;
   }
 }
+
+.dashboard-page .page-heading {
+  margin-bottom: 12px;
+}
+.dashboard-page .page-heading h1 {
+  font-size: 28px;
+}
+.dashboard-page .page-heading p {
+  margin: 4px 0;
+}
+.dashboard-page .actions {
+  flex-wrap: wrap;
+}
+.dashboard-page .metrics {
+  margin: 14px 0;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.dashboard-page .metric {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 4px 10px;
+}
+.dashboard-page .metric svg {
+  grid-row: 1 / 3;
+  align-self: center;
+  margin: 0;
+}
+.dashboard-page .metric span {
+  margin: 0;
+}
+.dashboard-page .metric strong {
+  grid-column: 2;
+  font-size: 22px;
+}
+.dashboard-history {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.dashboard-history .panel {
+  padding: 16px;
+  margin: 0;
+  min-width: 0;
+}
+.dashboard-history .history-row {
+  padding: 10px 0;
+  gap: 10px;
+}
+.dashboard-history .history-row strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.dashboard-history .history-row small {
+  font-size: 11px;
+}
+.dashboard-history .row-icon {
+  padding: 6px;
+}
+.dashboard-history .empty {
+  padding: 18px 12px;
+  margin: 10px 0;
+}
+@media (max-width: 950px) {
+  .dashboard-page .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .dashboard-history {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 500px) {
+  .dashboard-page .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

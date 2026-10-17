@@ -356,9 +356,9 @@ export function Scanner({
                   </button>
                   <button
                     disabled={control.isPending}
-                    onClick={() => control.mutate("cancel")}
+                    onClick={() => control.mutate("stop")}
                   >
-                    <Square size={14} /> Cancel
+                    <Square size={14} /> Stop scan
                   </button>
                 </>
               ) : ["paused", "interrupted", "failed"].includes(
@@ -371,8 +371,8 @@ export function Scanner({
                   >
                     <Play size={15} /> Resume
                   </button>
-                  <button onClick={() => control.mutate("cancel")}>
-                    Cancel
+                  <button onClick={() => control.mutate("stop")}>
+                    Stop scan
                   </button>
                 </>
               ) : null}

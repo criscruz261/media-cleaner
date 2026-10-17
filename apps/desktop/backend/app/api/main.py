@@ -293,8 +293,8 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
 
     @app.post("/api/v1/scans/{scan_id}/{action}")
     def control_scan(scan_id: str, action: str):
-        if action == "checkpoint":
-            manager.pause_at_checkpoint(scan_id)
+        if action in {"checkpoint", "stop"}:
+            manager.pause_at_checkpoint(scan_id, stop=action == "stop")
             return get_scan(scan_id)
         with manager.lock:
             if manager.stopping:

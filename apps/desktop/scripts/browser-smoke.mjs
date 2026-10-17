@@ -16,7 +16,7 @@ try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${fixture.port}/#token=${fixture.token}`);
-  await page.getByRole("heading", { name: /A little space/ }).waitFor();
+  await page.getByRole("heading", { name: "Dashboard", exact: true }).waitFor();
   await page.getByRole("button", { name: "Scanner", exact: true }).click();
   await page.getByLabel("Folder paths · one per line").fill(fixture.media);
   await page.getByRole("button", { name: "Start scan", exact: true }).click();
@@ -248,7 +248,7 @@ try {
     .click();
   await page.getByText("restored", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Dashboard", exact: true }).click();
-  await page.getByRole("heading", { name: /A little space/ }).waitFor();
+  await page.getByRole("heading", { name: "Dashboard", exact: true }).waitFor();
   await mkdir(fixture.artifacts, { recursive: true });
   await page.screenshot({
     path: fixture.artifacts + "/dashboard.png",

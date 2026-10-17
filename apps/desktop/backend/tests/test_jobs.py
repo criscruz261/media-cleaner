@@ -473,3 +473,40 @@ def test_select_all_keep_none_survives_group_rebuild_and_batch_cleanup(client, w
     assert result.status_code == 200, result.text
     assert result.json()["status"] == "completed", result.text
     assert not any(workspace.glob("*.MOV"))
+
+
+def test_stop_saves_completed_results_and_waits_until_worker_stops(client, workspace, monkeypatch):
+    import time
+    from app.database.models import File
+
+    for name, data in [("a.mp4", b"same"), ("a copy.mp4", b"same"), ("waiting.mp4", b"later")]:
+        (workspace / name).write_bytes(data)
+    manager = client.app.state.manager
+    process = manager.process_file
+    waiting = threading.Event()
+    def controlled(scan_id, file_id, checkpoint):
+        with manager.sessions() as session:
+            is_waiting = session.get(File, file_id).name == "waiting.mp4"
+        if is_waiting:
+            waiting.set()
+            while True:
+                checkpoint()
+                time.sleep(0.01)
+        return process(scan_id, file_id, checkpoint)
+    monkeypatch.setattr(manager, "process_file", controlled)
+    job = client.post("/api/v1/scans", json={"roots": [str(workspace)]}).json()
+    assert waiting.wait(5)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if client.get(f"/api/v1/scans/{job['id']}").json()["processed"] == 2:
+            break
+        time.sleep(0.01)
+    response = client.post(f"/api/v1/scans/{job['id']}/stop", json={})
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "cancelled"
+    assert response.json()["processed"] == 2
+    assert "Scan stopped" in response.json()["stage"]
+    assert manager.active.done()
+    assert client.get(f"/api/v1/scans/{job['id']}/matches").json()["exact_groups"] == 1
+    assert client.post(f"/api/v1/scans/{job['id']}/resume", json={}).status_code == 400
+    assert all((workspace / name).exists() for name in ["a.mp4", "a copy.mp4", "waiting.mp4"])

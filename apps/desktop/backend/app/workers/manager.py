@@ -528,21 +528,47 @@ class JobManager:
                         metadata.warnings = list(metadata.warnings) + [warning]
                         session.commit()
 
-    def pause_at_checkpoint(self, scan_id):
+    def pause_at_checkpoint(self, scan_id, stop=False):
         with self.lock, self.sessions.begin() as session:
             job = session.get(ScanJob, scan_id)
             if not job or job.status not in {"queued", "running", "paused", "interrupted"}:
                 raise ValueError("This scan cannot be paused at a checkpoint")
             self.checkpointing.add(scan_id)
-            job.status, job.stage, job.updated_at = "paused", "Saving checkpoint", now()
+            job.status, job.stage, job.updated_at = "paused", "Stopping scan; saving checkpoint" if stop else "Saving checkpoint", now()
             active = self.active if self.active_id == scan_id else None
         try:
             # The coordinator may need the lock while its workers unwind.
             if active:
                 active.result()
+            if stop:
+                # Workers may finish a checkpoint before the coordinator publishes
+                # its match. Stop has no resume step, so index all saved results now.
+                with self.lock:
+                    with self.sessions.begin() as session:
+                        job = session.get(ScanJob, scan_id)
+                        job.stage = "Finalizing completed results before stop"
+                        options = job.options
+                    matcher = LiveMatcher(self.sessions, scan_id, options, lambda: None)
+                    try:
+                        last_id = ""
+                        while True:
+                            with self.sessions() as session:
+                                ready_ids = session.scalars(select(File.id).where(
+                                    File.scan_id == scan_id, File.status == "ready", File.id > last_id,
+                                ).order_by(File.id).limit(128)).all()
+                            if not ready_ids:
+                                break
+                            for file_id in ready_ids:
+                                matcher.add(file_id)
+                            last_id = ready_ids[-1]
+                        matcher.finish()
+                    finally:
+                        matcher.close()
             with self.sessions.begin() as session:
                 job = session.get(ScanJob, scan_id)
-                job.stage, job.updated_at = "Checkpoint saved; ready to resume", now()
+                job.status = "cancelled" if stop else "paused"
+                job.stage = "Scan stopped; completed results and checkpoints saved" if stop else "Checkpoint saved; ready to resume"
+                job.updated_at = now()
         finally:
             with self.lock:
                 self.checkpointing.discard(scan_id)
