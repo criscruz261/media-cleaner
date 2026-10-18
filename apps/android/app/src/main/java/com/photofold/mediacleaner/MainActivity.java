@@ -69,7 +69,23 @@ public final class MainActivity extends Activity {
   private Button batchDelete, moreGroups, reviewStart;
   private TextView progress, activity, access;
   private ProgressBar bar;
+  private static final String[] SENSITIVITY_KEYS = {
+    "strict", "balanced", "broad", "very_loose", "extra_loose", "maximum"
+  };
+  private static final String[] SENSITIVITY_NAMES = {
+    "Strict", "Balanced", "Loose", "Very loose", "Extra loose", "Maximum"
+  };
+  private static final String[] SENSITIVITY_HELP = {
+    "Near-identical copies; strict whole-image comparison.",
+    "Light edits and very close learned visual features.",
+    "Small subject movements and pose or framing changes.",
+    "Broader pose, viewpoint and partially missing-object matches.",
+    "Larger movement, camera-angle and scene changes.",
+    "Broadest subject and scene similarity, including changed poses, angles and missing objects."
+        + " Review candidates carefully; this does not verify identity."
+  };
   private Spinner albums;
+  private SeekBar sensitivitySlider, videoSamples;
   private String groupFilter = "";
   private int groupSort = 0;
   private Button start, pause, scanOptions;
@@ -212,15 +228,130 @@ public final class MainActivity extends Activity {
     button(recent, "View cleanup history", () -> switchPage("Cleanup"));
     label(dashboard, "Private by design · All media processing stays on this device.");
     LinearLayout body = card(pageBody("Scanner"));
-    heading(body, "1. Choose media", 18);
+    heading(body, "1. Scan setup", 18);
+    LinearLayout mediaOptions = scanSetupSection(body, "Media source and access");
     albums = new Spinner(this);
     albums.setContentDescription("Media source");
     albums.setAdapter(
         new ArrayAdapter<>(
             this, android.R.layout.simple_spinner_dropdown_item, List.of("All accessible media")));
-    body.addView(albums, new LinearLayout.LayoutParams(-1, dp(48)));
-    button(body, "Allow / change photo and video access", this::requestAccess);
-    access = hint(body, "");
+    mediaOptions.addView(albums, new LinearLayout.LayoutParams(-1, dp(48)));
+    button(mediaOptions, "Allow / change photo and video access", this::requestAccess);
+    access = hint(mediaOptions, "");
+    scanSetupDivider(body);
+    LinearLayout matchingOptions = column();
+    matchingOptions.setVisibility(View.GONE);
+    button(
+        body,
+        "Matching options · sensitivity and video samples",
+        () ->
+            matchingOptions.setVisibility(
+                matchingOptions.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
+    body.addView(matchingOptions);
+    LinearLayout sensitivityOptions = scanSetupSection(matchingOptions, "Matching sensitivity");
+    ((TextView) sensitivityOptions.getChildAt(0)).setGravity(Gravity.CENTER);
+    TextView sensitivityLabel = hint(sensitivityOptions, "");
+    sensitivityLabel.setGravity(Gravity.CENTER);
+    sensitivitySlider = new SeekBar(this);
+    sensitivitySlider.setContentDescription("Matching sensitivity");
+    sensitivitySlider.setMax(5);
+    sensitivitySlider.setProgress(Integer.parseInt(store.meta("draft_sensitivity", "1")));
+    sensitivityOptions.addView(sensitivitySlider, new LinearLayout.LayoutParams(-1, dp(48)));
+    GradientDrawable sensitivityTick = new GradientDrawable();
+    sensitivityTick.setShape(GradientDrawable.OVAL);
+    sensitivityTick.setColor(GREEN);
+    sensitivityTick.setSize(dp(5), dp(5));
+    sensitivitySlider.setTickMark(sensitivityTick);
+    LinearLayout sensitivityPoints = row();
+    sensitivityOptions.addView(sensitivityPoints);
+    TextView[] sensitivityLabels = new TextView[6];
+    for (int i = 0; i < 6; i++) {
+      final int option = i;
+      TextView label = new TextView(this);
+      label.setText(SENSITIVITY_NAMES[i]);
+      label.setTextSize(11);
+      label.setGravity(Gravity.CENTER);
+      label.setContentDescription(label.getText() + " sensitivity");
+      label.setOnClickListener(view -> sensitivitySlider.setProgress(option));
+      label.setFocusable(true);
+      sensitivityPoints.addView(label, new LinearLayout.LayoutParams(0, dp(48), 1));
+      sensitivityLabels[i] = label;
+    }
+    TextView sensitivityHelp = hint(sensitivityOptions, "");
+    sensitivityHelp.setGravity(Gravity.CENTER);
+    LinearLayout examples = column();
+    sensitivityOptions.addView(examples);
+    View[] sensitivityExamples = new View[6];
+    for (int i = 0; i < 6; i++) {
+      LinearLayout pair = row();
+      sensitivityExamples[i] = pair;
+      examples.addView(pair);
+      for (int side = 0; side < 2; side++) {
+        LinearLayout photo = column();
+        pair.addView(photo, new LinearLayout.LayoutParams(0, -2, 1));
+        ImageView image = new ImageView(this);
+        image.setImageBitmap(matchingExample(side == 0 ? 0 : i + 1));
+        image.setContentDescription(
+            side == 0 ? "Original photo" : SENSITIVITY_NAMES[i] + " matching example photo");
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        photo.addView(image, new LinearLayout.LayoutParams(-1, dp(120)));
+        hint(
+                photo,
+                side == 0
+                    ? "Original"
+                    : new String[] {
+                          "Near-identical copy",
+                          "Small light edit",
+                          "Small subject movement",
+                          "Changed pose · missing object",
+                          "Different camera angle",
+                          "Changed pose and background"
+                        }
+                        [i])
+            .setGravity(Gravity.CENTER);
+      }
+    }
+    hint(
+            sensitivityOptions,
+            "Example pair for the selected sensitivity: these kinds of differences may be grouped"
+                + " together. Illustrative photos, not a guarantee for every image. Exact"
+                + " duplicates are unchanged.")
+        .setGravity(Gravity.CENTER);
+    Runnable updateSensitivity =
+        () -> {
+          int value = sensitivitySlider.getProgress();
+          for (int i = 0; i < 6; i++) {
+            sensitivityExamples[i].setVisibility(i == value ? View.VISIBLE : View.GONE);
+            sensitivityLabels[i].setTextColor(i == value ? GREEN : MUTED);
+            sensitivityLabels[i].setTypeface(null, i == value ? Typeface.BOLD : Typeface.NORMAL);
+            sensitivityLabels[i].setSelected(i == value);
+          }
+          sensitivityLabel.setText(SENSITIVITY_NAMES[value]);
+          sensitivityHelp.setText(SENSITIVITY_HELP[value]);
+          store.put("draft_sensitivity", Integer.toString(value));
+        };
+    sensitivitySlider.setOnSeekBarChangeListener(sliderListener(updateSensitivity));
+    updateSensitivity.run();
+    LinearLayout samplingOptions = scanSetupSection(matchingOptions, "Video sampling");
+    TextView samplesLabel = hint(samplingOptions, "");
+    videoSamples = new SeekBar(this);
+    videoSamples.setContentDescription("Video samples per video");
+    videoSamples.setMax(18);
+    videoSamples.setProgress(Integer.parseInt(store.meta("draft_samples", "9")) - 6);
+    samplingOptions.addView(videoSamples, new LinearLayout.LayoutParams(-1, dp(48)));
+    Runnable updateSamples =
+        () -> {
+          int count = videoSamples.getProgress() + 6;
+          samplesLabel.setText("Video samples · " + count + " frames per video");
+          store.put("draft_samples", Integer.toString(count));
+        };
+    videoSamples.setOnSeekBarChangeListener(sliderListener(updateSamples));
+    updateSamples.run();
+    hint(
+        samplingOptions,
+        "6 = faster · 24 = more coverage. Frames are evenly spaced across each video; more samples"
+            + " take longer. Continue Scan resumes unfinished scans with their saved settings.");
+    scanSetupDivider(body);
     heading(body, "2. Scan", 18);
     hint(body, "Scan recomputes analysis. Continue Scan uses your saved checkpoint.");
     LinearLayout actions = row();
@@ -856,6 +987,47 @@ public final class MainActivity extends Activity {
         });
   }
 
+  private void scanSetupDivider(LinearLayout parent) {
+    View divider = new View(this);
+    divider.setBackgroundColor(BORDER);
+    divider.setAlpha(0.65f);
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(1));
+    params.setMargins(0, dp(10), 0, dp(10));
+    parent.addView(divider, params);
+  }
+
+  private LinearLayout scanSetupSection(LinearLayout parent, String title) {
+    if (parent.getChildCount() > 0) scanSetupDivider(parent);
+    LinearLayout section = column();
+    parent.addView(section);
+    heading(section, title, 14);
+    return section;
+  }
+
+  private SeekBar.OnSeekBarChangeListener sliderListener(Runnable update) {
+    return new SeekBar.OnSeekBarChangeListener() {
+      public void onProgressChanged(SeekBar bar, int progress, boolean user) {
+        update.run();
+      }
+
+      public void onStartTrackingTouch(SeekBar bar) {}
+
+      public void onStopTrackingTouch(SeekBar bar) {}
+    };
+  }
+
+  private Bitmap matchingExample(int variant) {
+    BitmapFactory.Options options = new BitmapFactory.Options();
+    options.inScaled = false;
+    Bitmap atlas =
+        BitmapFactory.decodeResource(getResources(), R.drawable.matching_scenes, options);
+    int width = atlas.getWidth() / 2, height = atlas.getHeight() / 4;
+    Bitmap photo =
+        Bitmap.createBitmap(atlas, variant % 2 * width, variant / 2 * height, width, height);
+    atlas.recycle();
+    return photo;
+  }
+
   private void start(boolean restore) {
     if (checkpointBusy) {
       message("Checkpoint is still being saved.");
@@ -877,10 +1049,21 @@ public final class MainActivity extends Activity {
             : (albums.getSelectedItemPosition() == 0
                 ? ""
                 : String.valueOf(albums.getSelectedItem()));
+    boolean savedSettings = restore && !store.meta("status", "").equals("completed");
+    String sensitivity =
+        savedSettings
+            ? store.meta("scan_sensitivity", "balanced")
+            : SENSITIVITY_KEYS[sensitivitySlider.getProgress()];
+    int samples =
+        savedSettings
+            ? Integer.parseInt(store.meta("scan_samples", "9"))
+            : videoSamples.getProgress() + 6;
     startForegroundService(
         new Intent(this, ScanService.class)
             .putExtra("album", album)
-            .putExtra("force_rescan", !restore));
+            .putExtra("force_rescan", !restore)
+            .putExtra("sensitivity", sensitivity)
+            .putExtra("video_samples", samples));
   }
 
   private void refresh() {
@@ -899,6 +1082,8 @@ public final class MainActivity extends Activity {
     scanOptions.setEnabled(!active && !cleanupBusy && !checkpointBusy);
     pause.setEnabled(active && !ScanService.paused.get() && !checkpointBusy);
     albums.setEnabled(!active && !cleanupBusy && !checkpointBusy);
+    sensitivitySlider.setEnabled(!active && !cleanupBusy && !checkpointBusy);
+    videoSamples.setEnabled(!active && !cleanupBusy && !checkpointBusy);
     int total = Integer.parseInt(store.meta("total", "0")),
         done = Integer.parseInt(store.meta("processed", "0"));
     progress.setText(

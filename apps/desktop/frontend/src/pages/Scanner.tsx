@@ -22,6 +22,30 @@ import { LiveMatches } from "../components/LiveMatches";
 import { loadDraft, saveLocal, draftKey } from "../services/workspace";
 import { ErrorMessage, Pagination } from "../components/ui";
 import type { Scan, Page, Cleanup } from "../types/api";
+const sensitivityKeys = [
+  "strict",
+  "balanced",
+  "broad",
+  "very_loose",
+  "extra_loose",
+  "maximum",
+];
+const sensitivityNames = [
+  "Strict",
+  "Balanced",
+  "Loose",
+  "Very loose",
+  "Extra loose",
+  "Maximum",
+];
+const sensitivityDescriptions = [
+  "Near-identical copies; strict whole-image comparison.",
+  "Light edits and very close learned visual features.",
+  "Small subject movements and pose or framing changes.",
+  "Broader pose, viewpoint and partially missing-object matches.",
+  "Larger movement, camera-angle and scene changes.",
+  "Broadest subject and scene similarity, including changed poses, angles and missing objects. Review candidates carefully; this does not verify identity.",
+];
 export function Scanner({
   scanId,
   selectScan,
@@ -56,6 +80,7 @@ export function Scanner({
   );
   const [continueScan, setContinueScan] = useState(false);
   const [draft] = useState(loadDraft);
+  const [videoSamples, setVideoSamples] = useState(draft.videoSamples);
   const [roots, setRoots] = useState(draft.roots),
     [excluded, setExcluded] = useState(draft.excluded),
     [extensions, setExtensions] = useState(draft.extensions),
@@ -71,8 +96,9 @@ export function Scanner({
       hidden,
       mode,
       sensitivity,
+      videoSamples,
     });
-  }, [roots, excluded, extensions, hidden, mode, sensitivity]);
+  }, [roots, excluded, extensions, hidden, mode, sensitivity, videoSamples]);
   const client = useQueryClient();
   const scan = useQuery({
     queryKey: ["scan", scanId],
@@ -107,6 +133,7 @@ export function Scanner({
         force_rescan: forceRescan,
         mode,
         sensitivity,
+        video_samples: videoSamples,
       }),
     onSuccess: (scan) => {
       selectScan(scan.id);
@@ -180,68 +207,176 @@ export function Scanner({
             } else start.mutate(true);
           }}
         >
-          <div className="section-heading">
-            <label htmlFor="roots">Folder paths · one per line</label>
-            <button
-              type="button"
-              disabled={browse.isPending}
-              onClick={() => browse.mutate()}
-            >
-              <FolderOpen size={14} />
-              {browse.isPending ? "Choosing…" : "Browse folder"}
-            </button>
-          </div>
-          <ErrorMessage error={browse.error} />
-          <textarea
-            id="roots"
-            required
-            rows={2}
-            placeholder={"/Volumes/Photos/2025 - Bangkok\n/Users/you/Pictures"}
-            value={roots}
-            onChange={(e) => setRoots(e.target.value)}
-          />
-          <p className="hint">
-            Use absolute paths or ~. Subfolders are included. Mount or connect
-            drives before scanning.
-          </p>
-          <div className="form-grid">
-            <div>
-              <label htmlFor="scan-mode">Scan mode</label>
-              <select
-                id="scan-mode"
-                value={mode}
-                onChange={(e) => setMode(e.target.value)}
+          <section className="scan-setup-section" aria-label="Media folders">
+            <div className="section-heading">
+              <label htmlFor="roots">Folder paths · one per line</label>
+              <button
+                type="button"
+                disabled={browse.isPending}
+                onClick={() => browse.mutate()}
               >
-                <option value="similar">
-                  Similar photos, videos & animations
-                </option>
-                <option value="exact">Exact duplicates · all media</option>
-                <option value="images">Images · exact duplicates</option>
-                <option value="videos">Videos · exact duplicates</option>
-              </select>
+                <FolderOpen size={14} />
+                {browse.isPending ? "Choosing…" : "Browse folder"}
+              </button>
             </div>
-            {mode === "similar" && (
-              <div>
+            <ErrorMessage error={browse.error} />
+            <textarea
+              id="roots"
+              required
+              rows={2}
+              placeholder={
+                "/Volumes/Photos/2025 - Bangkok\n/Users/you/Pictures"
+              }
+              value={roots}
+              onChange={(e) => setRoots(e.target.value)}
+            />
+            <p className="hint">
+              Use absolute paths or ~. Subfolders are included. Mount or connect
+              drives before scanning.
+            </p>
+          </section>
+          <section className="scan-setup-section" aria-label="Scan mode">
+            <label htmlFor="scan-mode">Scan mode</label>
+            <select
+              id="scan-mode"
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+            >
+              <option value="similar">
+                Similar photos, videos & animations
+              </option>
+              <option value="exact">Exact duplicates · all media</option>
+              <option value="images">Images · exact duplicates</option>
+              <option value="videos">Videos · exact duplicates</option>
+            </select>
+          </section>
+          {mode === "similar" && (
+            <>
+              <section
+                className="scan-setup-section sensitivity-section"
+                aria-label="Matching sensitivity"
+              >
                 <label htmlFor="sensitivity">
                   Media similarity sensitivity
                 </label>
-                <select
-                  id="sensitivity"
-                  value={sensitivity}
-                  onChange={(event) => setSensitivity(event.target.value)}
+                <div className="sensitivity-control">
+                  <div className="sensitivity-track">
+                    <input
+                      id="sensitivity"
+                      type="range"
+                      min="0"
+                      max="5"
+                      step="1"
+                      value={sensitivityKeys.indexOf(sensitivity)}
+                      aria-valuetext={
+                        sensitivityNames[sensitivityKeys.indexOf(sensitivity)]
+                      }
+                      onChange={(event) =>
+                        setSensitivity(
+                          sensitivityKeys[Number(event.target.value)],
+                        )
+                      }
+                    />
+                    <div className="sensitivity-stops" aria-hidden="true">
+                      {sensitivityKeys.map((option, index) => (
+                        <span
+                          key={option}
+                          className={sensitivity === option ? "selected" : ""}
+                          style={{ left: `${index * 20}%` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="sensitivity-labels">
+                    {sensitivityKeys.map((option, index) => (
+                      <button
+                        type="button"
+                        key={option}
+                        aria-pressed={sensitivity === option}
+                        style={{ left: `${index * 20}%` }}
+                        onClick={() => setSensitivity(option)}
+                      >
+                        {sensitivityNames[index]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="hint">
+                  {
+                    sensitivityDescriptions[
+                      sensitivityKeys.indexOf(sensitivity)
+                    ]
+                  }
+                </p>
+                <div
+                  className="matching-examples"
+                  aria-label="Illustrative matching examples"
                 >
-                  <option value="strict">Strict · fewer, closer matches</option>
-                  <option value="balanced">
-                    Balanced · re-encoded and lightly edited media
-                  </option>
-                  <option value="broad">
-                    Broad · more candidates to review
-                  </option>
-                </select>
-              </div>
-            )}
-          </div>
-          <details className="scanner-advanced">
+                  {[0, sensitivityKeys.indexOf(sensitivity) + 1].map(
+                    (variant, index) => (
+                      <figure key={index}>
+                        <div
+                          className="matching-photo"
+                          role="img"
+                          aria-label={
+                            index === 0
+                              ? "Original photo"
+                              : `${sensitivityNames[sensitivityKeys.indexOf(sensitivity)]} matching example photo`
+                          }
+                          style={{
+                            backgroundPosition: `${variant % 2 === 0 ? 0 : 100}% ${(Math.floor(variant / 2) * 100) / 3}%`,
+                          }}
+                        />
+                        <figcaption>
+                          {index === 0
+                            ? "Original"
+                            : [
+                                "Near-identical copy",
+                                "Small light edit",
+                                "Small subject movement",
+                                "Changed pose · missing object",
+                                "Different camera angle",
+                                "Changed pose and background",
+                              ][sensitivityKeys.indexOf(sensitivity)]}
+                        </figcaption>
+                      </figure>
+                    ),
+                  )}
+                </div>
+                <p className="hint">
+                  Example pair for the selected sensitivity: these kinds of
+                  differences may be grouped together. Illustrative photos, not
+                  a guarantee for every image. Exact duplicates are unchanged.
+                </p>
+              </section>
+              <section
+                className="scan-setup-section"
+                aria-label="Video sampling"
+              >
+                <label htmlFor="video-samples">
+                  Video samples · {videoSamples} frames per video
+                </label>
+                <input
+                  id="video-samples"
+                  type="range"
+                  min="6"
+                  max="24"
+                  step="1"
+                  value={videoSamples}
+                  onChange={(event) =>
+                    setVideoSamples(Number(event.target.value))
+                  }
+                />
+                <p className="hint">
+                  6 = faster · 24 = more coverage. Frames are evenly spaced
+                  across videos and animations; more samples take longer.
+                  Continue Scan resumes unfinished scans with their saved
+                  settings.
+                </p>
+              </section>
+            </>
+          )}
+          <details className="scanner-advanced scan-setup-section">
             <summary>Advanced options · exclusions & hidden files</summary>
             <p className="hint">
               Photo pHash + dHash and time-spaced video/animation frame
@@ -249,7 +384,10 @@ export function Scanner({
               partial clips can be missed. Unsupported decoders are reported
               below the scan.
             </p>
-            <div>
+            <section
+              className="scan-setup-section"
+              aria-label="Excluded extensions"
+            >
               <label htmlFor="extensions">Exclude extensions</label>
               <input
                 id="extensions"
@@ -257,24 +395,31 @@ export function Scanner({
                 value={extensions}
                 onChange={(e) => setExtensions(e.target.value)}
               />
-            </div>
-            <label htmlFor="excluded">
-              Excluded folders · one absolute path per line
-            </label>
-            <textarea
-              id="excluded"
-              rows={2}
-              value={excluded}
-              onChange={(e) => setExcluded(e.target.value)}
-            />
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={hidden}
-                onChange={(e) => setHidden(e.target.checked)}
-              />{" "}
-              Include hidden files and folders
-            </label>
+            </section>
+            <section
+              className="scan-setup-section"
+              aria-label="Excluded folders"
+            >
+              <label htmlFor="excluded">
+                Excluded folders · one absolute path per line
+              </label>
+              <textarea
+                id="excluded"
+                rows={2}
+                value={excluded}
+                onChange={(e) => setExcluded(e.target.value)}
+              />
+            </section>
+            <section className="scan-setup-section" aria-label="Hidden files">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={hidden}
+                  onChange={(e) => setHidden(e.target.checked)}
+                />{" "}
+                Include hidden files and folders
+              </label>
+            </section>
           </details>
           <div className="form-footer">
             <p className="muted">

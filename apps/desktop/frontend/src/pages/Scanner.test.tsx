@@ -36,6 +36,32 @@ describe("scanner", () => {
     expect(
       screen.getByRole("option", { name: /Similar photos, videos/ }),
     ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Media similarity sensitivity"), {
+      target: { value: "2" },
+    });
+    fireEvent.change(screen.getByLabelText(/Video samples ·/), {
+      target: { value: "18" },
+    });
+    expect(
+      screen.getByRole("img", { name: "Loose matching example photo" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("img")).toHaveLength(2);
+    for (const [option, example] of [
+      ["Strict", "Strict"],
+      ["Balanced", "Balanced"],
+      ["Loose", "Loose"],
+      ["Very loose", "Very loose"],
+      ["Extra loose", "Extra loose"],
+      ["Maximum", "Maximum"],
+    ]) {
+      const point = screen.getByRole("button", { name: option });
+      fireEvent.click(point);
+      expect(point).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getAllByRole("img")).toHaveLength(2);
+      expect(
+        screen.getByRole("img", { name: `${example} matching example photo` }),
+      ).toBeInTheDocument();
+    }
     fireEvent.click(screen.getAllByRole("button", { name: "Scan" })[0]);
     await waitFor(() => expect(select).toHaveBeenCalledWith("scan-id"));
     const body = JSON.parse(
@@ -44,7 +70,8 @@ describe("scanner", () => {
     );
     expect(body.force_rescan).toBe(true);
     expect(body.mode).toBe("similar");
-    expect(body.sensitivity).toBe("balanced");
+    expect(body.sensitivity).toBe("maximum");
+    expect(body.video_samples).toBe(18);
     expect(body.roots).toEqual(["/photos", "/Volumes/External"]);
     expect(body.excluded_extensions).toEqual([".lrv", ".insv"]);
     vi.unstubAllGlobals();

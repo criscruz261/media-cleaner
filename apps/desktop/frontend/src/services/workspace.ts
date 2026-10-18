@@ -26,6 +26,7 @@ type ScanDraft = {
   hidden: boolean;
   mode: string;
   sensitivity: string;
+  videoSamples: number;
 };
 export function loadDraft(): ScanDraft {
   const defaults = {
@@ -35,6 +36,7 @@ export function loadDraft(): ScanDraft {
     hidden: false,
     mode: "similar",
     sensitivity: "balanced",
+    videoSamples: 9,
   };
   try {
     const value = JSON.parse(localStorage.getItem(draftKey) ?? "null");
@@ -47,7 +49,20 @@ export function loadDraft(): ScanDraft {
       mode: ["similar", "exact", "images", "videos"].includes(value.mode)
         ? value.mode
         : "similar",
-      sensitivity: ["strict", "balanced", "broad"].includes(value.sensitivity)
+      videoSamples:
+        Number.isInteger(value.videoSamples) &&
+        value.videoSamples >= 6 &&
+        value.videoSamples <= 24
+          ? value.videoSamples
+          : 9,
+      sensitivity: [
+        "strict",
+        "balanced",
+        "broad",
+        "very_loose",
+        "extra_loose",
+        "maximum",
+      ].includes(value.sensitivity)
         ? value.sensitivity
         : "balanced",
     };

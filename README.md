@@ -138,3 +138,33 @@ Database, API token, and rotating diagnostic logs default to platform applicatio
 The app compares binary equality, photo appearance, and sampled video/animation sequences; it also decodes RAW previews with rawpy/LibRaw. Actual codec/camera support varies. Missing, corrupt or unsupported inputs retain exact-match coverage and appear in scanner warnings. Video matching does not compare audio or every frame, so manual playback review is essential. Crops, trims, partial overlap, semantic matching and audio fingerprints are not implemented. Static/low-detail clips and long or untimed animations may be omitted from approximate analysis. No verified Live Photo pairing, scheduling, packaged Tauri runtime, stable cross-platform hardware UUID or 100k-file performance guarantee is claimed. Versioned fingerprints are cached for unchanged files; normal operation is offline after setup.
 
 Next: broader corpus calibration and **Phase 4** partial/advanced similarity and audio corroboration. See [architecture](docs/architecture.md), [algorithms](docs/algorithms.md), [API](docs/api.md), [database](docs/database.md), [security](docs/security.md), and [Phase 1 status](docs/phase-1.md).
+
+### Matching controls
+
+Scanner offers a **Strict → Balanced → Loose → Very loose → Extra loose → Maximum** sensitivity slider. Balanced is
+the default; Loose returns more candidates that need review. Exact SHA-256
+duplicate detection is unchanged. The landscape examples illustrate small and
+larger edits; they are not a promise that a specific pair will match.
+
+**Video samples** selects 6–24 evenly spaced frames per video (default 9). More
+frames cover more of the timeline and take longer; audio and unsampled moments
+can still differ. Desktop applies this count to animations too. Cached frame
+analysis is reused only when its sample count matches. Continue Scan uses the
+saved settings for unfinished scans; Scan starts fresh with the chosen settings.
+Android places these controls under **1. Scan setup → Matching options**.
+
+The sensitivity section is centered. Very loose, Extra loose, and Maximum widen
+perceptual hash and duration tolerances progressively. Maximum can include
+unrelated candidates; inspect groups before deleting. The two-photo preview
+uses progressively stronger display color edits for the added levels.
+
+### Subject and scene variation
+
+Similarity scans now use a bundled local image model alongside pHash/dHash.
+Maximum can find broader subject/scene resemblance across movement, changed
+poses, camera angles and backgrounds. Region features help when objects are
+missing or obscured. Lower sensitivity levels require closer agreement; Strict
+retains whole-image hash matching. This is visual similarity, not identity
+verification, and every approximate match still needs review. Video samples use
+the same features. Old descriptors are re-analyzed once for the new model.
+See [subject matching](docs/subject-matching.md) for model provenance and thresholds.

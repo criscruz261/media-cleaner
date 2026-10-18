@@ -14,4 +14,4 @@ android {
     buildTypes { release { minifyEnabled false } }
     lint { abortOnError true }
 }
-dependencies { implementation project(':matching') }
+dependencies { implementation project(':matching'); implementation 'com.google.mediapipe:tasks-vision:0.10.21' }

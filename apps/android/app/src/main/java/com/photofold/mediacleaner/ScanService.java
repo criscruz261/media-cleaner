@@ -62,7 +62,21 @@ public final class ScanService extends Service {
     if (album == null) album = "";
     String selected = album;
     boolean forceRescan = intent != null && intent.getBooleanExtra("force_rescan", false);
-    executor.submit(() -> scan(selected, forceRescan));
+    String sensitivity =
+        intent == null
+            ? store.meta("scan_sensitivity", "balanced")
+            : intent.getStringExtra("sensitivity");
+    if (sensitivity == null) sensitivity = "balanced";
+    int samples =
+        intent == null
+            ? Integer.parseInt(store.meta("scan_samples", "9"))
+            : intent.getIntExtra("video_samples", 9);
+    samples = Math.max(6, Math.min(24, samples));
+    store.put("scan_sensitivity", sensitivity);
+    store.put("scan_samples", Integer.toString(samples));
+    final String selectedSensitivity = sensitivity;
+    final int selectedSamples = samples;
+    executor.submit(() -> scan(selected, forceRescan, selectedSensitivity, selectedSamples));
     return START_NOT_STICKY;
   }
 
@@ -79,7 +93,7 @@ public final class ScanService extends Service {
     getSystemService(NotificationManager.class).notify(1, notification(text));
   }
 
-  private void scan(String album, boolean forceRescan) {
+  private void scan(String album, boolean forceRescan, String sensitivity, int sampleCount) {
     int processed = 0, errors = 0, cached = 0;
     try {
       store.put("status", "running");
@@ -88,7 +102,7 @@ public final class ScanService extends Service {
       check();
       if (forceRescan) store.invalidateAnalysis(discovered);
       store.begin(album, discovered.size());
-      Matcher matcher = new Matcher();
+      Matcher matcher = new Matcher(sensitivity);
       for (Media media : discovered) {
         check();
         Media old = store.file(media.uri);
@@ -99,7 +113,10 @@ public final class ScanService extends Service {
           if (old != null
               && old.ready
               && old.identity.equals(media.identity)
-              && old.descriptor.contains(Matcher.VERSION)) {
+              && old.descriptor.contains(Matcher.VERSION)
+              && (!media.kind.equals("video")
+                  || new org.json.JSONObject(old.descriptor).optInt("sample_count", 9)
+                      == sampleCount)) {
             media.digest = old.digest;
             media.descriptor = old.descriptor;
             media.warning = old.warning;
@@ -107,7 +124,8 @@ public final class ScanService extends Service {
           } else {
             media.digest = MediaRepository.hash(this, media, this::check, this::activity);
             try {
-              media.descriptor = MediaRepository.describe(this, media, this::check, this::activity);
+              media.descriptor =
+                  MediaRepository.describe(this, media, this::check, this::activity, sampleCount);
             } catch (Stopped stopped) {
               throw stopped;
             } catch (Exception failure) {

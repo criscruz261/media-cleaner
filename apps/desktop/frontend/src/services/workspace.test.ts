@@ -14,6 +14,7 @@ describe("saved scanner workspace", () => {
       roots: "/photos",
       mode: "similar",
       sensitivity: "strict",
+      videoSamples: 18,
       hidden: true,
     });
     expect(loadWorkspace()).toEqual({ page: "Scanner", scanId: "running-id" });
@@ -21,8 +22,15 @@ describe("saved scanner workspace", () => {
       roots: "/photos",
       mode: "similar",
       sensitivity: "strict",
+      videoSamples: 18,
       hidden: true,
     });
+  });
+  it("restores the three added sensitivity levels", () => {
+    for (const sensitivity of ["very_loose", "extra_loose", "maximum"]) {
+      saveLocal(draftKey, { sensitivity });
+      expect(loadDraft().sensitivity).toBe(sensitivity);
+    }
   });
   it("falls back safely for damaged or outdated browser storage", () => {
     localStorage.setItem(workspaceKey, "{");
@@ -32,6 +40,7 @@ describe("saved scanner workspace", () => {
       roots: "",
       mode: "similar",
       sensitivity: "balanced",
+      videoSamples: 9,
     });
   });
 });

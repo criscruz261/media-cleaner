@@ -1,12 +1,12 @@
 """Build and verify a portable folder, publishing only after the smoke test."""
-from importlib import metadata
 import json
-from pathlib import Path
 import platform
 import shutil
 import subprocess
 import sys
 import tempfile
+from importlib import metadata
+from pathlib import Path
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
                    "--distpath", str(work / "dist"), "--workpath", str(work / "work"), "--specpath", str(work),
                    "--paths", str(backend), "--add-data", f"{frontend};frontend",
                    "--add-data", f"{backend / 'migrations'};migrations", "--add-data", f"{tools};media-tools"]
-        for package in ("app", "uvicorn", "alembic", "sqlalchemy", "PIL", "pillow_heif", "rawpy", "imagehash", "scipy", "pywt"):
+        for package in ("app", "uvicorn", "alembic", "sqlalchemy", "PIL", "pillow_heif", "rawpy", "imagehash", "scipy", "pywt", "mediapipe"):
             command += ["--collect-all", package]
         command += [str(Path(__file__).with_name("launcher.py"))]
         subprocess.run(command, check=True, cwd=root)

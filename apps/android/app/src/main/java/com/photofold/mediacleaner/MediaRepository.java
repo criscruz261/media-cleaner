@@ -151,23 +151,37 @@ final class MediaRepository {
     return result.toString();
   }
 
-  static Matcher.Signature signature(Bitmap source) {
+  static Matcher.Signature signature(Context context, Bitmap source) {
     Bitmap square = Bitmap.createScaledBitmap(source, 32, 32, true),
         gradient = Bitmap.createScaledBitmap(source, 9, 8, true);
     try {
       int[] a = new int[1024], b = new int[72];
       square.getPixels(a, 0, 32, 0, 0, 32, 32);
       gradient.getPixels(b, 0, 9, 0, 0, 9, 8);
-      return Matcher.fingerprint(a, b, (double) source.getWidth() / source.getHeight());
+      Matcher.Signature classic =
+          Matcher.fingerprint(a, b, (double) source.getWidth() / source.getHeight());
+      if (classic == null) return null;
+      SubjectEmbedding.Features features = SubjectEmbedding.describe(context, source);
+      return new Matcher.Signature(
+          classic.phash(),
+          classic.dhash(),
+          classic.aspect(),
+          classic.red(),
+          classic.green(),
+          classic.blue(),
+          features.whole(),
+          features.regions());
     } finally {
       if (square != source) square.recycle();
       if (gradient != source && gradient != square) gradient.recycle();
     }
   }
 
-  static String describe(Context context, Media media, Check check, Progress progress)
+  static String describe(
+      Context context, Media media, Check check, Progress progress, int sampleCount)
       throws Exception {
-    JSONObject result = new JSONObject().put("version", Matcher.VERSION);
+    JSONObject result =
+        new JSONObject().put("version", Matcher.VERSION).put("sample_count", sampleCount);
     if (media.kind.equals("video")) {
       try (MediaMetadataRetriever retriever = new MediaMetadataRetriever()) {
         retriever.setDataSource(context, media.uri());
@@ -177,18 +191,19 @@ final class MediaRepository {
         if (duration <= 0 || !Double.isFinite(duration))
           throw new IOException("Video duration unavailable");
         JSONArray frames = new JSONArray();
-        for (int slot = 0; slot < 9; slot++) {
+        for (int slot = 0; slot < sampleCount; slot++) {
           check.run();
-          progress.update("Comparing " + media.name + " · sample " + (slot + 1) + " / 9");
+          progress.update(
+              "Comparing " + media.name + " · sample " + (slot + 1) + " / " + sampleCount);
           Bitmap frame =
               retriever.getScaledFrameAtTime(
-                  (long) (duration * (slot + 0.5) / 9 * 1_000_000),
+                  (long) (duration * (slot + 0.5) / sampleCount * 1_000_000),
                   MediaMetadataRetriever.OPTION_CLOSEST,
                   256,
                   256);
           if (frame != null)
             try {
-              Matcher.Signature signature = signature(frame);
+              Matcher.Signature signature = signature(context, frame);
               if (signature != null) frames.put(Media.json(signature).put("slot", slot));
             } finally {
               frame.recycle();
@@ -222,7 +237,7 @@ final class MediaRepository {
                     Math.max(1, (int) (w * scale)), Math.max(1, (int) (h * scale)));
               });
       try {
-        Matcher.Signature signature = signature(image);
+        Matcher.Signature signature = signature(context, image);
         if (signature != null) result.put("photo", Media.json(signature));
         else
           media.warning =

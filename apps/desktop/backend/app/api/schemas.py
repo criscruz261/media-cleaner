@@ -9,7 +9,8 @@ class ScanRequest(BaseModel):
     excluded_extensions: list[str] = Field(default_factory=list, max_length=128)
     include_hidden: bool = False
     force_rescan: bool = False
-    sensitivity: Literal["strict", "balanced", "broad"] = "balanced"
+    video_samples: int = Field(default=9, ge=6, le=24)
+    sensitivity: Literal["strict", "balanced", "broad", "very_loose", "extra_loose", "maximum"] = "balanced"
 
 
 class ReviewRequest(BaseModel):

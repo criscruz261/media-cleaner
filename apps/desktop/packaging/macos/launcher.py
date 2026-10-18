@@ -87,6 +87,11 @@ def main():
                             stderr=subprocess.PIPE,
                             timeout=20,
                         )
+                    from app.similarity import subjects
+                    from app.similarity.images import fingerprint_image
+                    descriptor = fingerprint_image(resources / "frontend/matching/sensitivity-atlas.png")
+                    assert descriptor.get("embedding") and len(descriptor.get("regions", [])) == 4
+                    subjects.close()
                 else:
                     webbrowser.open(url + "#token=" + token)
                     print(
@@ -112,7 +117,7 @@ def main():
             if temporary:
                 temporary.cleanup()
     if args.smoke_test:
-        print("Portable smoke test passed: UI, API, migrations, FFmpeg and FFprobe.")
+        print("Portable smoke test passed: UI, API, migrations, FFmpeg, FFprobe and local subject model.")
 
 
 if __name__ == "__main__":

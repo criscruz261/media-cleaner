@@ -44,16 +44,29 @@ final class Media {
         .put("aspect", s.aspect())
         .put("red", s.red())
         .put("green", s.green())
-        .put("blue", s.blue());
+        .put("blue", s.blue())
+        .put("embedding", Base64.getEncoder().encodeToString(s.embedding()))
+        .put(
+            "regions",
+            new JSONArray(
+                Arrays.stream(s.regions())
+                    .map(value -> Base64.getEncoder().encodeToString(value))
+                    .collect(java.util.stream.Collectors.toList())));
   }
 
   static Matcher.Signature signature(JSONObject value) throws JSONException {
+    JSONArray encoded = value.optJSONArray("regions");
+    byte[][] regions = new byte[encoded == null ? 0 : encoded.length()][];
+    for (int i = 0; i < regions.length; i++)
+      regions[i] = Base64.getDecoder().decode(encoded.getString(i));
     return new Matcher.Signature(
         Long.parseUnsignedLong(value.getString("p"), 16),
         Long.parseUnsignedLong(value.getString("d"), 16),
         value.getDouble("aspect"),
         value.getDouble("red"),
         value.getDouble("green"),
-        value.getDouble("blue"));
+        value.getDouble("blue"),
+        Base64.getDecoder().decode(value.optString("embedding", "")),
+        regions);
   }
 }

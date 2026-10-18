@@ -347,6 +347,9 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     ):
         job = get_scan(scan_id)
         with sessions() as session:
+            # SQLite legacy transaction mode does not begin on SELECT. Keep the
+            # page and its counts in one snapshot while live groups are added.
+            session.connection().exec_driver_sql("BEGIN")
             query = select(DuplicateGroup).where(
                 DuplicateGroup.scan_id == scan_id,
                 DuplicateGroup.member_count > 1,

@@ -37,7 +37,7 @@ selections, filters, expanded groups, and each section's scroll position.
 Choose a scan mode from the dropdown, then press the main button to start.
 Selecting a mode only updates the label.
 
-Scanner uses three steps: **Choose media → Scan → Review matches**.
+Scanner uses three steps: **Scan setup → Scan → Review matches**.
 The **Scan** button always recomputes hashes and visual analysis for selected
 media. Its dropdown offers **Continue Scan** when a saved scan exists, reusing
 completed analysis and continuing the saved media selection. New results replace
@@ -144,7 +144,7 @@ The root build runs matching tests, APK compilation and Android lint, then copie
 - `../../shared/matching/`: pure Java matching code and JVM tests, with no Android dependency.
 - `scripts/`: local tool bootstrap, build, and emulator smoke testing.
 
-SHA-256 covers supported accessible media regardless of visual decoder availability. Still photos use 64-bit DCT pHash and dHash, aspect/color checks and complete-link groups. Videos use nine time-spaced native-decoder samples, a duration tolerance, at least six common informative samples and at least 80% compatible common samples. Static/low-detail sequences are excluded from approximate matching. A BK-tree indexes candidate groups; every member must satisfy pairwise checks. Exact-only content is not duplicated as an approximate group.
+SHA-256 covers supported accessible media regardless of visual decoder availability. Still photos use 64-bit DCT pHash and dHash, aspect/color checks and complete-link groups. Videos use 6–24 time-spaced native-decoder samples (default nine), a duration tolerance, and at least six common informative samples. Strict requires all common samples to match, Balanced requires 85%, and Loose requires 75%, always with at least six matching samples. Static/low-detail sequences are excluded from approximate matching. A BK-tree indexes candidate groups; every member must satisfy pairwise checks. Exact-only content is not duplicated as an approximate group.
 
 Android descriptors have their own `android-phash-dhash-v1` version. Their pixels/resampling/native decoders can differ from desktop implementations; binary-identical fingerprints and cross-platform cache interchange are not claimed. Video audio, every-frame equivalence, arbitrary trims/crops, semantic matching and animated-image sequence matching are not implemented. Animated images currently retain exact matching only. Actual camera/codec support varies by phone.
 
@@ -175,3 +175,33 @@ Tap a group thumbnail to open a screen-fitting preview. **Previous/Next** naviga
 New matching groups append at the end in first-seen order. Updates replace only the changed group card, preserving unaffected cards and expanded groups. Scan progress remains pinned above the scrolling results and appears inside photo/video review dialogs, with a reminder that groups may change during scanning.
 
 **Save checkpoint** waits for the scanner to pause and finish saving completed work. **Continue Scan** rechecks access and continues using unchanged completed files. **Save checkpoint and close** asks for confirmation, waits for the checkpoint, stops the scan service, and closes the app task. Resolve any pending Trash/restore confirmation before using this action.
+
+### Matching controls
+
+Scanner offers a **Strict → Balanced → Loose → Very loose → Extra loose → Maximum** sensitivity slider. Balanced is
+the default; Loose returns more candidates that need review. Exact SHA-256
+duplicate detection is unchanged. The landscape examples illustrate small and
+larger edits; they are not a promise that a specific pair will match.
+
+**Video samples** selects 6–24 evenly spaced frames per video (default 9). More
+frames cover more of the timeline and take longer; audio and unsampled moments
+can still differ. Desktop applies this count to animations too. Cached frame
+analysis is reused only when its sample count matches. Continue Scan uses the
+saved settings for unfinished scans; Scan starts fresh with the chosen settings.
+Android places these controls under **1. Scan setup → Matching options**.
+
+The sensitivity section is centered. Very loose, Extra loose, and Maximum widen
+perceptual hash and duration tolerances progressively. Maximum can include
+unrelated candidates; inspect groups before deleting. The two-photo preview
+uses progressively stronger display color edits for the added levels.
+
+### Subject and scene variation
+
+Similarity scans now use a bundled local image model alongside pHash/dHash.
+Maximum can find broader subject/scene resemblance across movement, changed
+poses, camera angles and backgrounds. Region features help when objects are
+missing or obscured. Lower sensitivity levels require closer agreement; Strict
+retains whole-image hash matching. This is visual similarity, not identity
+verification, and every approximate match still needs review. Video samples use
+the same features. Old descriptors are re-analyzed once for the new model.
+See [subject matching](../../docs/subject-matching.md) for model provenance and thresholds.

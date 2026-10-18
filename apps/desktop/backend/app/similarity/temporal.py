@@ -11,11 +11,25 @@ from app.core.media_tools import executable, run_media
 from app.similarity.images import describe_image, Signature, PRESETS
 
 ALGORITHM = "temporal-phash-dhash"
-VERSION = "2"
+VERSION = "3"
 SAMPLE_COUNT = 9
 MIN_MATCHES = 6
-DURATION_TOLERANCE = {"strict": 0.01, "balanced": 0.03, "broad": 0.06}
-MATCH_RATIO = {"strict": 1.0, "balanced": 0.85, "broad": 0.75}
+DURATION_TOLERANCE = {
+    "strict": 0.01,
+    "balanced": 0.03,
+    "broad": 0.06,
+    "very_loose": 0.09,
+    "extra_loose": 0.12,
+    "maximum": 0.15,
+}
+MATCH_RATIO = {
+    "strict": 1.0,
+    "balanced": 0.85,
+    "broad": 0.75,
+    "very_loose": 0.70,
+    "extra_loose": 0.65,
+    "maximum": 0.60,
+}
 
 
 def is_animation(path: Path) -> bool:
@@ -125,35 +139,41 @@ def sample_video_frame(
         return image.convert("RGB")
 
 
-def finish_descriptor(duration: float, frames: list[dict], kind: str, **metadata) -> dict:
+def finish_descriptor(
+    duration: float, frames: list[dict], kind: str, sample_count: int = SAMPLE_COUNT, **metadata
+) -> dict:
     distinct = {(frame["phash"], frame["dhash"]) for frame in frames}
     if len(frames) < MIN_MATCHES or len(distinct) < 2:
         return {
             "skipped": "Not enough informative, changing frames for sequence similarity; exact matching still works."
         }
-    return {"duration": duration, "frames": frames, "kind": kind, "sample_count": SAMPLE_COUNT, **metadata}
+    return {"duration": duration, "frames": frames, "kind": kind, "sample_count": sample_count, **metadata}
 
 
-def fingerprint_video(path: Path, checkpoint: Callable[[], None] = lambda: None, progress=None) -> dict:
+def fingerprint_video(
+    path: Path, checkpoint: Callable[[], None] = lambda: None, progress=None, sample_count: int = SAMPLE_COUNT
+) -> dict:
     metadata = probe_video(path, checkpoint)
     duration = metadata.pop("duration")
     frame_interval = metadata.pop("frame_interval")
     frames = []
-    for slot in range(SAMPLE_COUNT):
+    for slot in range(sample_count):
         if progress:
-            progress(slot, SAMPLE_COUNT)
+            progress(slot, sample_count)
         checkpoint()
-        timestamp = duration * (slot + 0.5) / SAMPLE_COUNT
+        timestamp = duration * (slot + 0.5) / sample_count
         # FFmpeg accurate seeking yields the next frame. Offset one frame interval
         # to sample the frame displayed at the requested time, including the last interval.
         image = sample_video_frame(path, max(0, timestamp - frame_interval + 1e-6), checkpoint)
         descriptor = describe_image(image) if image is not None else None
         if descriptor:
             frames.append({"slot": slot, "time": timestamp, **descriptor})
-    return finish_descriptor(duration, frames, "video", **metadata)
+    return finish_descriptor(duration, frames, "video", sample_count, **metadata)
 
 
-def fingerprint_animation(path: Path, checkpoint: Callable[[], None] = lambda: None, progress=None) -> dict:
+def fingerprint_animation(
+    path: Path, checkpoint: Callable[[], None] = lambda: None, progress=None, sample_count: int = SAMPLE_COUNT
+) -> dict:
     with Image.open(path) as image:
         count = image.n_frames
         if count > 2000:
@@ -169,11 +189,11 @@ def fingerprint_animation(path: Path, checkpoint: Callable[[], None] = lambda: N
             durations.append(duration)
         duration = sum(durations)
         frames, current, boundary = [], 0, durations[0]
-        for slot in range(SAMPLE_COUNT):
+        for slot in range(sample_count):
             if progress:
-                progress(slot, SAMPLE_COUNT)
+                progress(slot, sample_count)
             checkpoint()
-            timestamp = duration * (slot + 0.5) / SAMPLE_COUNT
+            timestamp = duration * (slot + 0.5) / sample_count
             while current < count - 1 and timestamp >= boundary:
                 current += 1
                 boundary += durations[current]
@@ -181,7 +201,7 @@ def fingerprint_animation(path: Path, checkpoint: Callable[[], None] = lambda: N
             descriptor = describe_image(image.convert("RGB"))
             if descriptor:
                 frames.append({"slot": slot, "time": timestamp, **descriptor})
-        return finish_descriptor(duration, frames, "animation", source_frames=count)
+        return finish_descriptor(duration, frames, "animation", sample_count, source_frames=count)
 
 
 def duration_tolerance(duration: float, sensitivity: str) -> float:
@@ -189,6 +209,8 @@ def duration_tolerance(duration: float, sensitivity: str) -> float:
 
 
 def compare_sequences(left: dict, right: dict, sensitivity: str) -> dict | None:
+    if left.get("sample_count", SAMPLE_COUNT) != right.get("sample_count", SAMPLE_COUNT):
+        return None
     if "frames" not in left or "frames" not in right:
         return None
     if abs(left["duration"] - right["duration"]) > duration_tolerance(
@@ -218,7 +240,7 @@ def compare_sequences(left: dict, right: dict, sensitivity: str) -> dict | None:
         "matched_samples": len(matched),
         "compared_samples": len(common),
         "required_samples": required,
-        "sample_count": SAMPLE_COUNT,
+        "sample_count": left.get("sample_count", SAMPLE_COUNT),
         "duration_difference_seconds": abs(left["duration"] - right["duration"]),
         "samples": matched,
         "note": "Sampled visual sequence only. Audio is not compared; review playback and sound before removal.",

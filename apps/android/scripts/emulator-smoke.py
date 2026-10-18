@@ -217,7 +217,7 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     launch(scan=True)
     find("Scan complete.", timeout=180)
     # All five destinations remain reachable without changing the scan results.
-    for page, expected in [("Dashboard", "Library overview"), ("Scanner", "1. Choose media"),
+    for page, expected in [("Dashboard", "Library overview"), ("Scanner", "1. Scan setup"),
                            ("Review", "1. Choose matches"), ("Cleanup", "Cleanup and recovery"),
                            ("Settings", "Media access")]:
         navigate(page)
@@ -229,6 +229,11 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     assert meta["status"] == "completed", meta
     assert meta["errors"] == "0", meta
     assert int(meta["total"]) >= 5, meta
+    for kind, encoded in db.execute("SELECT kind,descriptor FROM files WHERE ready=1"):
+        descriptor = json.loads(encoded)
+        signatures = descriptor.get("frames", []) if kind == "video" else [descriptor.get("photo", {})]
+        assert signatures, descriptor
+        assert all(signature.get("embedding") and len(signature.get("regions", [])) == 4 for signature in signatures), descriptor
     groups = db.execute("SELECT classification,uris FROM groups").fetchall()
     assert any(
         kind == "EXACT_DUPLICATE" and len(json.loads(uris)) == 2

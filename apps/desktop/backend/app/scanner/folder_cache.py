@@ -41,20 +41,23 @@ def valid_descriptor(algorithm, version, value):
     if (algorithm, version) not in {(ALGORITHM, VERSION), (temporal.ALGORITHM, temporal.VERSION)}:
         return False
     if isinstance(value.get("skipped"), str):
-        return set(value) == {"skipped"}
+        return set(value) <= {"skipped", "sample_count"}
     if algorithm == ALGORITHM:
         return valid_signature(value)
     duration, frames = value["duration"], value["frames"]
+    sample_count = value.get("sample_count", 9)
     return (
         isinstance(duration, (int, float))
         and math.isfinite(duration)
         and duration > 0
         and value["kind"] in {"video", "animation"}
         and isinstance(frames, list)
-        and 0 < len(frames) <= 9
+        and type(sample_count) is int
+        and 6 <= sample_count <= 24
+        and 0 < len(frames) <= sample_count
         and len({frame["slot"] for frame in frames}) == len(frames)
         and all(
-            type(frame["slot"]) is int and 0 <= frame["slot"] < 9 and valid_signature(frame)
+            type(frame["slot"]) is int and 0 <= frame["slot"] < sample_count and valid_signature(frame)
             for frame in frames
         )
     )

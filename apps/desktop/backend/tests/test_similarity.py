@@ -92,7 +92,7 @@ def test_fingerprints_cached_and_invalidated(client, workspace, monkeypatch):
     with client.app.state.sessions() as session:
         fingerprints = session.scalars(select(Fingerprint)).all()
         assert len(fingerprints) == 3
-        assert all(item.algorithm == "imagehash-phash-dhash" and item.version == "2" for item in fingerprints)
+        assert all(item.algorithm == "imagehash-phash-dhash" and item.version == "3" for item in fingerprints)
 
 
 def test_index_matches_exhaustive_hamming_search():
@@ -297,3 +297,88 @@ def test_scan_from_scratch_bypasses_database_and_folder_analysis(client, workspa
     file_id = client.get(f"/api/v1/files?scan_id={fresh['id']}").json()["items"][0]["id"]
     client.app.state.manager.process_file(fresh["id"], file_id, lambda: None)
     assert len(hashes) == len(fingerprints) == 1
+
+
+def test_added_loose_levels_progressively_widen_matching():
+    from app.api.schemas import ScanRequest
+    from app.similarity.images import PRESETS
+    from app.similarity.temporal import MATCH_RATIO, DURATION_TOLERANCE
+
+    original = Signature(0, 0, 1.5, (100, 100, 100))
+    levels = ["broad", "very_loose", "extra_loose", "maximum"]
+    for previous, current, bits in zip(levels, levels[1:], [14, 18, 22]):
+        changed = Signature((1 << bits) - 1, 0, 1.5, (100, 100, 100))
+        assert not original.compatible(changed, PRESETS[previous])
+        assert original.compatible(changed, PRESETS[current])
+        assert MATCH_RATIO[current] < MATCH_RATIO[previous]
+        assert DURATION_TOLERANCE[current] > DURATION_TOLERANCE[previous]
+        assert ScanRequest(roots=["/photos"], sensitivity=current).sensitivity == current
+
+
+def test_maximum_recovers_viewpoint_and_missing_objects(client, workspace):
+    from app.similarity.images import PRESETS
+
+    atlas = Image.open(Path(__file__).parents[2] / "frontend/public/matching/sensitivity-atlas.png").convert(
+        "RGB"
+    )
+    original = atlas.crop((0, 0, atlas.width // 2, atlas.height // 2))
+    original.save(workspace / "original.png")
+    viewpoint = original.transform(original.size, Image.Transform.AFFINE, (0.9, 0.08, 15, 0.02, 0.95, 5))
+    viewpoint.save(workspace / "viewpoint.png")
+    missing = original.copy()
+    ImageDraw.Draw(missing).rectangle((25, 375, 320, 575), fill=(85, 100, 115))
+    missing.save(workspace / "missing-object.png")
+    a = Signature.from_value(fingerprint_image(workspace / "original.png"))
+    for filename in ["viewpoint.png", "missing-object.png"]:
+        b = Signature.from_value(fingerprint_image(workspace / filename))
+        assert not a.compatible(b, PRESETS["strict"])
+        assert a.compatible(b, PRESETS["maximum"])
+    # Exercise indexed candidate lookup, not only the pairwise comparison.
+    job = scan(client, [workspace], mode="similar", sensitivity="maximum")
+    assert job["status"] == "completed"
+    groups = client.get(f"/api/v1/groups?scan_id={job['id']}").json()["items"]
+    detail = [
+        client.get("/api/v1/groups/" + group["id"]).json()
+        for group in groups
+        if group["classification"] == "SIMILAR_CONTENT"
+    ]
+    assert any(
+        {file["name"] for file in group["files"]} >= {"original.png", "missing-object.png"}
+        for group in detail
+    )
+
+
+def test_subject_index_finds_changed_hashes_and_filters_by_sensitivity():
+    from app.similarity import subjects
+    import numpy as np
+
+    a = np.array([127, 0, 0, 0], dtype=np.int8).tobytes()
+    b = np.array([100, 70, 0, 0], dtype=np.int8).tobytes()
+    index = subjects.SubjectIndex()
+    index.add(a, "subject")
+    assert "subject" in list(index.search(b, 0.80))
+    assert "subject" not in list(index.search(b, 0.98))
+    original = Signature(0, 0, 1.5, (0, 0, 0), a)
+    changed = Signature((1 << 64) - 1, (1 << 64) - 1, 2.5, (255, 255, 255), b)
+    from app.similarity.images import PRESETS
+
+    assert original.compatible(changed, PRESETS["maximum"])
+    assert not original.compatible(changed, PRESETS["extra_loose"])
+
+
+def test_current_sensitivity_photo_examples_qualify_at_selected_levels():
+    from app.similarity.images import describe_image, PRESETS
+
+    atlas = Image.open(Path(__file__).parents[2] / "frontend/public/matching/sensitivity-scenes.png").convert(
+        "RGB"
+    )
+    width, height = atlas.width // 2, atlas.height // 4
+    original = Signature.from_value(describe_image(atlas.crop((0, 0, width, height))))
+    for cell, sensitivity in enumerate(
+        ["strict", "balanced", "broad", "very_loose", "extra_loose", "maximum"], 1
+    ):
+        photo = atlas.crop(
+            (cell % 2 * width, cell // 2 * height, (cell % 2 + 1) * width, (cell // 2 + 1) * height)
+        )
+        example = Signature.from_value(describe_image(photo))
+        assert original.compatible(example, PRESETS[sensitivity]), sensitivity

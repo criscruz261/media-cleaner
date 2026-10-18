@@ -74,6 +74,7 @@ def main():
             "imagehash",
             "scipy",
             "pywt",
+            "mediapipe",
         ):
             command += ["--collect-all", package]
         command += [str(Path(__file__).with_name("launcher.py"))]

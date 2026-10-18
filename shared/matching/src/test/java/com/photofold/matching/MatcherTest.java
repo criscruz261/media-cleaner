@@ -71,4 +71,85 @@ public class MatcherTest {
   public void lowDetailImagesAreSkipped() {
     assertNull(Matcher.fingerprint(new int[1024], new int[72], 1));
   }
+
+  @Test
+  public void sensitivityChangesCandidateSearchAndAcceptance() {
+    Matcher strict = new Matcher("strict"), loose = new Matcher("broad");
+    for (Matcher matcher : List.of(strict, loose)) {
+      matcher.add(photo("a", "a", "a", 0));
+      matcher.add(photo("b", "b", "b", 1023));
+    }
+    assertEquals(0, strict.groups().size());
+    assertEquals(1, loose.groups().size());
+  }
+
+  @Test
+  public void higherSampleCountsRequireMatchingMostFrames() {
+    List<Matcher.Frame> left = new ArrayList<>(), right = new ArrayList<>();
+    for (int i = 0; i < 24; i++) {
+      left.add(new Matcher.Frame(i, sig(1L << i)));
+      right.add(new Matcher.Frame(i, sig(i < 9 ? 1L << i : -1L)));
+    }
+    assertFalse(
+        Matcher.compatible(
+            new Matcher.Item("a", "a", 1, "a", "video", null, left, 3),
+            new Matcher.Item("b", "b", 1, "b", "video", null, right, 3)));
+  }
+
+  @Test
+  public void threeAdditionalLevelsProgressivelyWidenMatching() {
+    String[] levels = {"broad", "very_loose", "extra_loose", "maximum"};
+    int[] bits = {14, 18, 22};
+    for (int i = 0; i < 3; i++) {
+      Matcher previous = new Matcher(levels[i]), current = new Matcher(levels[i + 1]);
+      for (Matcher matcher : List.of(previous, current)) {
+        matcher.add(photo("a", "a", "a", 0));
+        matcher.add(photo("b", "b", "b", (1L << bits[i]) - 1));
+      }
+      assertEquals(0, previous.groups().size());
+      assertEquals(1, current.groups().size());
+    }
+  }
+
+  @Test
+  public void maximumFindsLearnedSubjectWithoutWholeImageHashAgreement() {
+    Matcher.Signature a =
+        new Matcher.Signature(0, 0, 1.5, 0, 0, 0, new byte[] {127, 0, 0, 0}, new byte[0][]);
+    Matcher.Signature b =
+        new Matcher.Signature(
+            -1L, -1L, 2.5, 255, 255, 255, new byte[] {100, 70, 0, 0}, new byte[0][]);
+    for (String level : List.of("strict", "extra_loose", "maximum")) {
+      Matcher matcher = new Matcher(level);
+      matcher.add(new Matcher.Item("a", "a", 1, "a", "image", a, List.of(), 0));
+      matcher.add(new Matcher.Item("b", "b", 1, "b", "image", b, List.of(), 0));
+      assertEquals(level.equals("maximum") ? 1 : 0, matcher.groups().size());
+    }
+  }
+
+  @Test
+  public void sharedRegionsCanRecoverMissingObjectsAtLooseLevels() {
+    byte[] region = {127, 0, 0, 0}, changed = {0, 127, 0, 0};
+    Matcher.Signature a =
+        new Matcher.Signature(
+            0,
+            0,
+            1.5,
+            0,
+            0,
+            0,
+            new byte[] {127, 0, 0, 0},
+            new byte[][] {region, region, region, region});
+    Matcher.Signature b =
+        new Matcher.Signature(
+            -1L,
+            -1L,
+            2.5,
+            255,
+            255,
+            255,
+            new byte[] {64, 110, 0, 0},
+            new byte[][] {region, region, changed, changed});
+    assertFalse(a.compatible(b, 4, 6));
+    assertTrue(a.compatible(b, 24, 26));
+  }
 }

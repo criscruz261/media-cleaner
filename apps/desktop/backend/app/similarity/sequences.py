@@ -4,6 +4,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 import json
 import math
+import base64
+from app.similarity.subjects import SubjectIndex, LIMITS
 from sqlalchemy import delete
 from app.database.models import ScanJob, now, DuplicateGroup, GroupMember, SimilarityMatch
 from app.similarity.images import HashIndex, PRESETS
@@ -19,11 +21,17 @@ def bucket(duration: float) -> int:
 class SequenceIndex:
     def __init__(self):
         self.buckets: dict[int, dict[int, HashIndex]] = {}
+        self.subjects = {}
 
     def add(self, value: dict, group_id: str):
         indexes = self.buckets.setdefault(bucket(value["duration"]), {})
         for frame in value["frames"]:
             indexes.setdefault(frame["slot"], HashIndex()).add(int(frame["phash"], 16), group_id)
+            subjects = self.subjects.setdefault(bucket(value["duration"]), {}).setdefault(
+                frame["slot"], SubjectIndex()
+            )
+            for encoded in [frame.get("embedding", ""), *frame.get("regions", [])]:
+                subjects.add(base64.b64decode(encoded), group_id)
 
     def candidates(self, value: dict, sensitivity: str):
         tolerance = duration_tolerance(value["duration"], sensitivity)
@@ -34,8 +42,16 @@ class SequenceIndex:
             indexes = self.buckets.get(number, {})
             for frame in value["frames"]:
                 index = indexes.get(frame["slot"])
-                if index:
-                    votes.update(index.search(int(frame["phash"], 16), PRESETS[sensitivity][0]))
+                found = (
+                    set(index.search(int(frame["phash"], 16), PRESETS[sensitivity][0])) if index else set()
+                )
+                subjects = self.subjects.get(number, {}).get(frame["slot"])
+                if subjects:
+                    for encoded in [frame.get("embedding", ""), *frame.get("regions", [])]:
+                        found.update(
+                            subjects.search(base64.b64decode(encoded), LIMITS[PRESETS[sensitivity][0]])
+                        )
+                votes.update(found)
         return [group_id for group_id, count in votes.items() if count >= MIN_MATCHES]
 
 
@@ -51,7 +67,7 @@ class SequenceCluster:
     count: int = 0
     total: int = 0
     largest: int = 0
-    minimum_matched: int = 9
+    minimum_matched: int = 24
     maximum_duration_difference: float = 0
 
 
@@ -129,7 +145,7 @@ def sequence_matcher(session, scan_id, sensitivity, checkpoint):
             "version": VERSION,
             "media_kind": "sequence",
             "member_kinds": sorted(target.kinds),
-            "sample_count": 9,
+            "sample_count": target.anchor.get("sample_count", 9),
             "minimum_matched_samples": target.minimum_matched,
             "max_duration_difference_seconds": target.maximum_duration_difference,
             "phash_limit": PRESETS[sensitivity][0],
@@ -155,7 +171,7 @@ def sequence_matcher(session, scan_id, sensitivity, checkpoint):
             "version": VERSION,
             "media_kind": "sequence",
             "member_kinds": sorted(cluster.kinds),
-            "sample_count": 9,
+            "sample_count": cluster.anchor.get("sample_count", 9),
             "minimum_matched_samples": cluster.minimum_matched,
             "max_duration_difference_seconds": cluster.maximum_duration_difference,
             "phash_limit": PRESETS[sensitivity][0],

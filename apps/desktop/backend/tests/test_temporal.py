@@ -258,3 +258,50 @@ def test_mkv_container_and_video_decode_failure(client, workspace):
     assert groups[0]["evidence"]["member_kinds"] == ["video"]
     warnings = client.get("/api/v1/scans/" + job["id"] + "/warnings").json()
     assert any("corrupt.insv" in item["path"] for item in warnings["items"])
+
+
+@pytest.mark.skipif(not TOOLS, reason="FFmpeg/FFprobe required")
+def test_sample_count_changes_decode_count_and_cache_compatibility(client, workspace, monkeypatch):
+    from app.similarity import temporal
+
+    frames = workspace.parent / "sample-count-frames"
+    make_frames(frames)
+    make_video(workspace / "clip.mp4", frames)
+    original = temporal.sample_video_frame
+    calls = []
+
+    def sample_frame(*args):
+        calls.append(args[1])
+        return original(*args)
+
+    monkeypatch.setattr(temporal, "sample_video_frame", sample_frame)
+    for count in (6, 18):
+        calls.clear()
+        job = scan(client, [workspace], mode="similar", video_samples=count)
+        assert job["status"] == "completed", job
+        assert len(calls) == count
+        from app.core.filesystem import identity
+        from app.scanner import folder_cache
+
+        clip = workspace / "clip.mp4"
+        portable = folder_cache.read(clip, [str(workspace)], identity(clip).key(str(clip)))
+        assert portable is not None
+        assert any(item["value"].get("sample_count") == count for item in portable["fingerprints"])
+        calls.clear()
+        assert scan(client, [workspace], mode="similar", video_samples=count)["status"] == "completed"
+        assert calls == []
+
+
+def test_different_sample_grids_do_not_match():
+    left = descriptor([1 << i for i in range(9)])
+    right = copy.deepcopy(left)
+    left["sample_count"], right["sample_count"] = 9, 18
+    assert compare_sequences(left, right, "broad") is None
+
+
+@pytest.mark.parametrize("count", [5, 25, 9.5])
+def test_invalid_sample_count_rejected(client, workspace, count):
+    assert (
+        client.post("/api/v1/scans", json={"roots": [str(workspace)], "video_samples": count}).status_code
+        == 422
+    )

@@ -5,14 +5,39 @@ import java.util.regex.Pattern;
 
 /** Platform-independent, conservative complete-link media matching. */
 public final class Matcher {
-  public static final String VERSION = "android-phash-dhash-v1";
+  public static final String VERSION = "android-phash-dhash-subject-v2";
   public static final int SAMPLE_COUNT = 9;
 
   public record Signature(
-      long phash, long dhash, double aspect, double red, double green, double blue) {
+      long phash,
+      long dhash,
+      double aspect,
+      double red,
+      double green,
+      double blue,
+      byte[] embedding,
+      byte[][] regions) {
+    public Signature(long phash, long dhash, double aspect, double red, double green, double blue) {
+      this(phash, dhash, aspect, red, green, blue, new byte[0], new byte[0][]);
+    }
+
     public boolean compatible(Signature other) {
-      return Long.bitCount(phash ^ other.phash) <= 8
-          && Long.bitCount(dhash ^ other.dhash) <= 10
+      return compatible(other, 8, 10);
+    }
+
+    public boolean compatible(Signature other, int pLimit, int dLimit) {
+      double limit = subjectLimit(pLimit);
+      double score = limit < 0 ? -1 : cosine(embedding, other.embedding);
+      if (limit >= 0 && score >= limit) return true;
+      if (pLimit >= 16 && score >= .40 && regions.length == 4 && other.regions.length == 4) {
+        double regionLimit = pLimit == 16 ? .97 : pLimit == 20 ? .94 : .90;
+        int matches = 0;
+        for (int i = 0; i < 4; i++)
+          if (cosine(regions[i], other.regions[i]) >= regionLimit) matches++;
+        if (matches >= 2) return true;
+      }
+      return Long.bitCount(phash ^ other.phash) <= pLimit
+          && Long.bitCount(dhash ^ other.dhash) <= dLimit
           && Math.abs(Math.log(aspect / other.aspect)) <= 0.1
           && Math.max(
                   Math.abs(red - other.red),
@@ -52,8 +77,33 @@ public final class Matcher {
   private final Map<String, Group> exact = new LinkedHashMap<>();
   private final Map<String, Group> similar = new LinkedHashMap<>();
   private final Tree photos = new Tree();
+  private final SubjectTree photoSubjects = new SubjectTree();
+  private final Map<Integer, SubjectTree> sequenceSubjects = new HashMap<>();
   private final Map<Integer, Tree> sequences = new HashMap<>();
   private final Set<String> seen = new HashSet<>();
+
+  private final int pLimit, dLimit;
+  private final double durationRatio, matchRatio;
+
+  public Matcher() {
+    this("balanced");
+  }
+
+  public Matcher(String sensitivity) {
+    int level =
+        switch (sensitivity) {
+          case "strict" -> 0;
+          case "broad" -> 2;
+          case "very_loose" -> 3;
+          case "extra_loose" -> 4;
+          case "maximum" -> 5;
+          default -> 1;
+        };
+    pLimit = new int[] {4, 8, 12, 16, 20, 24}[level];
+    dLimit = pLimit + 2;
+    durationRatio = new double[] {.01, .03, .06, .09, .12, .15}[level];
+    matchRatio = new double[] {1, .85, .75, .70, .65, .60}[level];
+  }
 
   public List<Group> add(Item item) {
     if (!seen.add(item.id) || item.digest == null) return List.of();
@@ -69,13 +119,18 @@ public final class Matcher {
     if (sequence) {
       for (Frame frame : item.frames) {
         Tree tree = sequences.get(frame.slot);
-        if (tree != null) tree.search(frame.signature.phash, 8, candidates);
+        if (tree != null) tree.search(frame.signature.phash, pLimit, candidates);
+        SubjectTree subjects = sequenceSubjects.get(frame.slot);
+        if (subjects != null) searchSubjects(subjects, frame.signature, candidates);
       }
-    } else photos.search(item.photo.phash, 8, candidates);
+    } else {
+      photos.search(item.photo.phash, pLimit, candidates);
+      searchSubjects(photoSubjects, item.photo, candidates);
+    }
     Group target = null;
     for (String id : candidates) {
       Group group = similar.get(id);
-      if (group.items.stream().allMatch(other -> compatible(item, other))) {
+      if (group.items.stream().allMatch(other -> compatibleWith(item, other))) {
         target = group;
         break;
       }
@@ -83,12 +138,20 @@ public final class Matcher {
     if (target == null) {
       target = new Group("similar:" + item.kind + ":" + item.id, "SIMILAR_CONTENT");
       similar.put(target.id, target);
-      if (sequence)
-        for (Frame frame : item.frames)
+      if (sequence) {
+        for (Frame frame : item.frames) {
           sequences
               .computeIfAbsent(frame.slot, ignored -> new Tree())
               .add(frame.signature.phash, target.id);
-      else photos.add(item.photo.phash, target.id);
+          addSubjects(
+              sequenceSubjects.computeIfAbsent(frame.slot, ignored -> new SubjectTree()),
+              frame.signature,
+              target.id);
+        }
+      } else {
+        photos.add(item.photo.phash, target.id);
+        addSubjects(photoSubjects, item.photo, target.id);
+      }
     }
     target.items.add(item);
     changed.add(target);
@@ -108,26 +171,32 @@ public final class Matcher {
   }
 
   public static boolean compatible(Item left, Item right) {
+    return new Matcher().compatibleWith(left, right);
+  }
+
+  private boolean compatibleWith(Item left, Item right) {
     if (!left.kind.equals(right.kind)) return false;
     if (!left.kind.equals("video"))
-      return left.photo != null && right.photo != null && left.photo.compatible(right.photo);
+      return left.photo != null
+          && right.photo != null
+          && left.photo.compatible(right.photo, pLimit, dLimit);
     if (!informative(left)
         || !informative(right)
         || Math.abs(left.duration - right.duration)
-            > Math.max(0.25, Math.min(left.duration, right.duration) * 0.03)) return false;
+            > Math.max(0.25, Math.min(left.duration, right.duration) * durationRatio)) return false;
     int common = 0, matched = 0;
     Set<String> distinct = new HashSet<>();
     for (Frame a : left.frames)
       for (Frame b : right.frames)
         if (a.slot == b.slot) {
           common++;
-          if (a.signature.compatible(b.signature)) {
+          if (a.signature.compatible(b.signature, pLimit, dLimit)) {
             matched++;
             distinct.add(a.signature.phash + ":" + a.signature.dhash);
           }
         }
     return common >= 6
-        && matched >= Math.max(6, (int) Math.ceil(common * 0.8))
+        && matched >= Math.max(6, (int) Math.ceil(common * matchRatio))
         && distinct.size() >= 2;
   }
 
@@ -136,6 +205,97 @@ public final class Matcher {
     for (Group group : exact.values()) if (group.visible()) result.add(group);
     for (Group group : similar.values()) if (group.visible()) result.add(group);
     return result;
+  }
+
+  private static double subjectLimit(int pLimit) {
+    return switch (pLimit) {
+      case 8 -> .98;
+      case 12 -> .95;
+      case 16 -> .91;
+      case 20 -> .86;
+      case 24 -> .80;
+      default -> -1;
+    };
+  }
+
+  public static double cosine(byte[] a, byte[] b) {
+    if (a.length == 0 || a.length != b.length) return -1;
+    double dot = 0, left = 0, right = 0;
+    for (int i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      left += a[i] * a[i];
+      right += b[i] * b[i];
+    }
+    return left == 0 || right == 0 ? -1 : Math.max(-1, Math.min(1, dot / Math.sqrt(left * right)));
+  }
+
+  private void addSubjects(SubjectTree tree, Signature signature, String id) {
+    if (subjectLimit(pLimit) < 0) return;
+    tree.add(signature.embedding, id);
+    for (byte[] region : signature.regions) tree.add(region, id);
+  }
+
+  private void searchSubjects(SubjectTree tree, Signature signature, Set<String> candidates) {
+    double limit = subjectLimit(pLimit);
+    if (limit < 0) return;
+    tree.search(signature.embedding, limit, candidates);
+    for (byte[] region : signature.regions) tree.search(region, limit, candidates);
+  }
+
+  private static final class SubjectTree {
+    private Node root;
+
+    private static final class Node {
+      byte[] value;
+      Set<String> groups = new LinkedHashSet<>();
+      Map<Integer, Node> children = new HashMap<>();
+
+      Node(byte[] value, String id) {
+        this.value = value;
+        groups.add(id);
+      }
+    }
+
+    private static int distance(byte[] a, byte[] b) {
+      return (int) (100 * Math.sqrt(Math.max(0, 2 - 2 * cosine(a, b))));
+    }
+
+    void add(byte[] value, String id) {
+      if (value.length == 0) return;
+      if (root == null) {
+        root = new Node(value, id);
+        return;
+      }
+      Node node = root;
+      while (true) {
+        if (Arrays.equals(value, node.value)) {
+          node.groups.add(id);
+          return;
+        }
+        int edge = distance(value, node.value);
+        Node child = node.children.get(edge);
+        if (child == null) {
+          node.children.put(edge, new Node(value, id));
+          return;
+        }
+        node = child;
+      }
+    }
+
+    void search(byte[] value, double limit, Set<String> found) {
+      if (value.length == 0 || root == null) return;
+      int radius = (int) Math.ceil(100 * Math.sqrt(2 - 2 * limit)) + 1;
+      Deque<Node> pending = new ArrayDeque<>();
+      pending.add(root);
+      while (!pending.isEmpty()) {
+        Node node = pending.removeLast();
+        int distance = distance(value, node.value);
+        if (distance <= radius) found.addAll(node.groups);
+        for (Map.Entry<Integer, Node> edge : node.children.entrySet())
+          if (edge.getKey() >= distance - radius && edge.getKey() <= distance + radius)
+            pending.add(edge.getValue());
+      }
+    }
   }
 
   private static final Pattern COPY =

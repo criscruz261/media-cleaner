@@ -315,6 +315,12 @@ class JobManager:
                         Fingerprint.cache_key == key,
                         Fingerprint.algorithm == algorithm,
                         Fingerprint.version == version,
+                        (
+                            func.coalesce(Fingerprint.value["sample_count"].as_integer(), 9)
+                            == options.get("video_samples", 9)
+                        )
+                        if sequence
+                        else True,
                     )
                     .limit(1)
                 )
@@ -339,12 +345,23 @@ class JobManager:
                     (
                         item
                         for item in portable["fingerprints"]
-                        if item["algorithm"] == algorithm and item["version"] == version
+                        if item["algorithm"] == algorithm
+                        and item["version"] == version
+                        and (
+                            not sequence
+                            or item["value"].get("sample_count", 9) == options.get("video_samples", 9)
+                        )
                     ),
                     None,
                 )
                 if entry:
                     previous = SimpleNamespace(value=entry["value"])
+        if (
+            sequence
+            and previous is not None
+            and previous.value.get("sample_count", 9) != options.get("video_samples", 9)
+        ):
+            previous = None
         try:
             if identity(path) != expected:
                 raise ValueError("File changed since discovery; start a new scan")
@@ -402,13 +419,19 @@ class JobManager:
                         descriptor = previous.value
                     elif sequence:
                         descriptor = (
-                            temporal.fingerprint_video(path, checkpoint, frame_progress)
+                            temporal.fingerprint_video(
+                                path, checkpoint, frame_progress, options.get("video_samples", 9)
+                            )
                             if media_type == "video"
-                            else temporal.fingerprint_animation(path, checkpoint, frame_progress)
+                            else temporal.fingerprint_animation(
+                                path, checkpoint, frame_progress, options.get("video_samples", 9)
+                            )
                         )
                     else:
                         self.update_activity(scan_id, file_id, phase="comparing image")
                         descriptor = fingerprint_image(path)
+                    if sequence:
+                        descriptor = {**descriptor, "sample_count": options.get("video_samples", 9)}
                     if "skipped" in descriptor and descriptor["skipped"] not in warnings:
                         warnings = list(warnings) + [descriptor["skipped"]]
                 except ScanStopped:
@@ -432,7 +455,9 @@ class JobManager:
                             Fingerprint.version == version,
                         )
                     )
-                    if not saved:
+                    if saved:
+                        saved.value = descriptor
+                    else:
                         session.add(
                             Fingerprint(
                                 file_id=file_id,
@@ -539,7 +564,11 @@ class JobManager:
             if not job or job.status not in {"queued", "running", "paused", "interrupted"}:
                 raise ValueError("This scan cannot be paused at a checkpoint")
             self.checkpointing.add(scan_id)
-            job.status, job.stage, job.updated_at = "paused", "Stopping scan; saving checkpoint" if stop else "Saving checkpoint", now()
+            job.status, job.stage, job.updated_at = (
+                "paused",
+                "Stopping scan; saving checkpoint" if stop else "Saving checkpoint",
+                now(),
+            )
             active = self.active if self.active_id == scan_id else None
         try:
             # The coordinator may need the lock while its workers unwind.
@@ -558,9 +587,16 @@ class JobManager:
                         last_id = ""
                         while True:
                             with self.sessions() as session:
-                                ready_ids = session.scalars(select(File.id).where(
-                                    File.scan_id == scan_id, File.status == "ready", File.id > last_id,
-                                ).order_by(File.id).limit(128)).all()
+                                ready_ids = session.scalars(
+                                    select(File.id)
+                                    .where(
+                                        File.scan_id == scan_id,
+                                        File.status == "ready",
+                                        File.id > last_id,
+                                    )
+                                    .order_by(File.id)
+                                    .limit(128)
+                                ).all()
                             if not ready_ids:
                                 break
                             for file_id in ready_ids:
@@ -572,7 +608,11 @@ class JobManager:
             with self.sessions.begin() as session:
                 job = session.get(ScanJob, scan_id)
                 job.status = "cancelled" if stop else "paused"
-                job.stage = "Scan stopped; completed results and checkpoints saved" if stop else "Checkpoint saved; ready to resume"
+                job.stage = (
+                    "Scan stopped; completed results and checkpoints saved"
+                    if stop
+                    else "Checkpoint saved; ready to resume"
+                )
                 job.updated_at = now()
         finally:
             with self.lock:

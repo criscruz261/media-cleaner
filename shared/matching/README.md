@@ -5,3 +5,8 @@ Pure Java 17 library consumed by the Android app. It has no Android, filesystem,
 `Matcher` implements SHA-256 group indexing, 64-bit photo signatures, BK-tree candidate search, complete-link appearance groups, sampled-sequence duration/detail checks, and advisory copy-name recommendations. Pixel decoding, SHA-256 calculation, persistence, keep selections and confirmation remain application adapters. Android's descriptor version is explicit; matching desktop fingerprints byte-for-byte is not asserted.
 
 Run `./gradlew :matching:test` from `apps/android`, or use the Android build script. Tests cover exact/similar separation, original recommendations, weak-chain rejection, low-detail rejection and video sample/duration constraints.
+
+Matching accepts Strict, Balanced (default), Loose, Very loose, Extra loose, and Maximum presets. Video
+sampling is configurable by the Android scanner from 6 to 24 evenly spaced
+frames (default 9); at least six informative frames and the preset match ratio
+are required. Exact matching does not depend on these controls.
