@@ -83,3 +83,9 @@ Desktop.ini
 
 /deployment-package/android/*
 !/deployment-package/android/.gitkeep
+
+
+/deployment-package/windows/*
+!/deployment-package/windows/.gitkeep
+
+/deployment-package/*.zip

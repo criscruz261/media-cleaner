@@ -152,6 +152,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Python environment creation failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
 & .\.venv-phase1\Scripts\python.exe -m pip install --no-deps -e apps/desktop/backend
 if ($LASTEXITCODE -ne 0) { throw 'Backend installation failed' }
+& .\.venv-phase1\Scripts\python.exe -m pip install hatchling
+if ($LASTEXITCODE -ne 0) { throw 'Backend build tooling installation failed' }
 & .\.venv-phase1\Scripts\python.exe apps/desktop/scripts/install-media-tools.py
 if ($LASTEXITCODE -ne 0) { throw 'Media tool installation failed' }
 # Launch npm through the selected Node executable and normalize the environment
@@ -161,4 +163,4 @@ $NpmRunner = Join-Path $PSScriptRoot 'run-npm.cjs'
 if ($LASTEXITCODE -ne 0) { throw 'Frontend installation failed' }
 & $Node $NpmRunner run build --prefix apps/desktop/frontend
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
-Write-Host 'Setup complete. Run ./scripts/windows/2-run.ps1'
+Write-Host 'Setup complete. Run ./scripts/windows/3-run.ps1'
