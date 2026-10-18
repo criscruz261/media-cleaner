@@ -256,3 +256,44 @@ def test_existing_phase1_database_is_upgraded_without_losing_history(tmp_path):
             assert "cache_key" in {
                 column["name"] for column in inspect(session.bind).get_columns("fingerprints")
             }
+
+
+def test_scan_from_scratch_bypasses_database_and_folder_analysis(client, workspace, monkeypatch):
+    import app.workers.manager as manager
+
+    sample(workspace / "original.png")
+    first = scan(client, [workspace], mode="similar")
+    assert first["status"] == "completed"
+    assert list((workspace / ".media-cleaner-cache").glob("*/*.json"))
+    cached = scan(client, [workspace], mode="similar")
+    assert cached["cache_hits"] == 1
+    hashes, fingerprints = [], []
+    original_hash, original_fingerprint = manager.hash_file, manager.fingerprint_image
+
+    def hash_again(path, *args):
+        hashes.append(path)
+        return original_hash(path, *args)
+
+    def fingerprint_again(path):
+        fingerprints.append(path)
+        return original_fingerprint(path)
+
+    def no_folder_read(*args):
+        raise AssertionError("A from-scratch scan must not read folder cache analysis")
+
+    monkeypatch.setattr(manager, "hash_file", hash_again)
+    monkeypatch.setattr(manager, "fingerprint_image", fingerprint_again)
+    original_read = manager.folder_cache.read
+    monkeypatch.setattr(manager.folder_cache, "read", no_folder_read)
+    # Cache writing merges prior review choices; isolate analysis reads here.
+    monkeypatch.setattr(manager.folder_cache, "write", lambda *args, **kwargs: None)
+    fresh = scan(client, [workspace], mode="similar", force_rescan=True)
+    assert fresh["status"] == "completed"
+    assert fresh["cache_hits"] == 0
+    assert len(hashes) == len(fingerprints) == 1
+
+    # Resuming this fresh scan may still reuse its own completed checkpoints.
+    monkeypatch.setattr(manager.folder_cache, "read", original_read)
+    file_id = client.get(f"/api/v1/files?scan_id={fresh['id']}").json()["items"][0]["id"]
+    client.app.state.manager.process_file(fresh["id"], file_id, lambda: None)
+    assert len(hashes) == len(fingerprints) == 1

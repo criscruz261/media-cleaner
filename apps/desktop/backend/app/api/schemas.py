@@ -8,6 +8,7 @@ class ScanRequest(BaseModel):
     excluded_directories: list[str] = Field(default_factory=list, max_length=128)
     excluded_extensions: list[str] = Field(default_factory=list, max_length=128)
     include_hidden: bool = False
+    force_rescan: bool = False
     sensitivity: Literal["strict", "balanced", "broad"] = "balanced"
 
 

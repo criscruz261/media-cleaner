@@ -72,7 +72,8 @@ public final class MainActivity extends Activity {
   private Spinner albums;
   private String groupFilter = "";
   private int groupSort = 0;
-  private Button start, pause, resume;
+  private Button start, pause, scanOptions;
+  private boolean continueScan;
   private TextView scannerNext;
   private String stamp = "";
   private int limit = 5;
@@ -220,13 +221,47 @@ public final class MainActivity extends Activity {
     body.addView(albums, new LinearLayout.LayoutParams(-1, dp(48)));
     button(body, "Allow / change photo and video access", this::requestAccess);
     access = hint(body, "");
-    heading(body, "2. Scan or resume", 18);
-    hint(body, "Start a new scan, or resume your saved checkpoint.");
+    heading(body, "2. Scan", 18);
+    hint(body, "Scan recomputes analysis. Continue Scan uses your saved checkpoint.");
     LinearLayout actions = row();
     body.addView(actions);
-    start = button(actions, "Scan", () -> start(false));
-    primary(start);
-    resume = button(actions, "Resume", () -> start(true));
+    start = button(actions, "Scan", () -> start(continueScan));
+    primary(start, new float[] {dp(12), dp(12), 0, 0, 0, 0, dp(12), dp(12)});
+    scanOptions =
+        button(
+            actions,
+            "▾",
+            () -> {
+              PopupMenu menu = new PopupMenu(this, scanOptions);
+              menu.getMenu()
+                  .add("Scan")
+                  .setOnMenuItemClickListener(
+                      item -> {
+                        continueScan = false;
+                        start.setText("Scan");
+                        return true;
+                      });
+              menu.getMenu()
+                  .add("Continue Scan")
+                  .setEnabled(!store.meta("status", "").isEmpty())
+                  .setOnMenuItemClickListener(
+                      item -> {
+                        continueScan = true;
+                        start.setText("Continue Scan");
+                        return true;
+                      });
+              menu.show();
+            });
+    scanOptions.setContentDescription("Scan options");
+    primary(scanOptions, new float[] {0, 0, dp(12), dp(12), dp(12), dp(12), 0, 0});
+    LinearLayout.LayoutParams mainScanParams = new LinearLayout.LayoutParams(0, -2, 1);
+    mainScanParams.setMargins(dp(2), dp(4), 0, dp(4));
+    start.setLayoutParams(mainScanParams);
+    LinearLayout.LayoutParams optionsParams = new LinearLayout.LayoutParams(dp(48), -2);
+    optionsParams.setMargins(0, dp(4), dp(2), dp(4));
+    scanOptions.setMinWidth(0);
+    scanOptions.setMinimumWidth(0);
+    scanOptions.setLayoutParams(optionsParams);
     pause = button(body, "Save checkpoint", () -> saveCheckpoint(false));
     heading(body, "3. Review matches", 18);
     scannerNext = hint(body, "Scan first, then compare matches and choose what to keep.");
@@ -242,7 +277,7 @@ public final class MainActivity extends Activity {
     body.addView(sessionOptions);
     hint(
         sessionOptions,
-        "Completed files and choices save automatically. Save a checkpoint to pause; Resume"
+        "Completed files and choices save automatically. Save a checkpoint to pause; Continue Scan"
             + " continues later.");
     danger(button(sessionOptions, "Save checkpoint and shut down", () -> saveCheckpoint(true)));
     body = card(pageBody("Review"));
@@ -610,15 +645,24 @@ public final class MainActivity extends Activity {
   }
 
   private void primary(Button view) {
+    primary(view, null);
+  }
+
+  private void primary(Button view, float[] corners) {
     view.setTextColor(
         new ColorStateList(
             new int[][] {new int[] {-android.R.attr.state_enabled}, new int[] {}},
             new int[] {MUTED, ON_PRIMARY}));
     android.graphics.drawable.StateListDrawable background =
         new android.graphics.drawable.StateListDrawable();
-    background.addState(new int[] {-android.R.attr.state_enabled}, surface(TINT, BORDER));
+    GradientDrawable disabled = surface(TINT, BORDER), enabled = surface(GREEN, 0);
+    if (corners != null) {
+      disabled.setCornerRadii(corners);
+      enabled.setCornerRadii(corners);
+    }
+    background.addState(new int[] {-android.R.attr.state_enabled}, disabled);
     background.addState(
-        new int[] {}, new RippleDrawable(ColorStateList.valueOf(TINT), surface(GREEN, 0), null));
+        new int[] {}, new RippleDrawable(ColorStateList.valueOf(TINT), enabled, null));
     view.setBackground(background);
   }
 
@@ -706,8 +750,8 @@ public final class MainActivity extends Activity {
       new AlertDialog.Builder(this)
           .setTitle("Save checkpoint and shut down?")
           .setMessage(
-              "Pause scanning and save completed work before closing the app. Use Resume after"
-                  + " reopening. Unfinished files will be checked again.")
+              "Pause scanning and save completed work before closing the app. Use Continue Scan"
+                  + " after reopening. Unfinished files will be checked again.")
           .setPositiveButton("Save and shut down", (dialog, which) -> awaitCheckpoint(true))
           .setNegativeButton("Cancel", null)
           .show();
@@ -722,7 +766,9 @@ public final class MainActivity extends Activity {
         () -> {
           try {
             while (ScanService.running.get()) Thread.sleep(50);
-            store.put("activity", "Checkpoint saved. Resume to continue from completed files.");
+            store.put(
+                "activity",
+                "Checkpoint saved. Use Continue Scan to continue from completed files.");
             store.touch();
             runOnUiThread(
                 () -> {
@@ -831,7 +877,10 @@ public final class MainActivity extends Activity {
             : (albums.getSelectedItemPosition() == 0
                 ? ""
                 : String.valueOf(albums.getSelectedItem()));
-    startForegroundService(new Intent(this, ScanService.class).putExtra("album", album));
+    startForegroundService(
+        new Intent(this, ScanService.class)
+            .putExtra("album", album)
+            .putExtra("force_rescan", !restore));
   }
 
   private void refresh() {
@@ -847,8 +896,7 @@ public final class MainActivity extends Activity {
                 ? "Selected media access: only items you allowed will be scanned."
                 : "Scanning is limited to the media access granted by Android.");
     start.setEnabled(!active && !cleanupBusy && !checkpointBusy);
-    resume.setEnabled(
-        !active && !cleanupBusy && !checkpointBusy && !store.meta("status", "").isEmpty());
+    scanOptions.setEnabled(!active && !cleanupBusy && !checkpointBusy);
     pause.setEnabled(active && !ScanService.paused.get() && !checkpointBusy);
     albums.setEnabled(!active && !cleanupBusy && !checkpointBusy);
     int total = Integer.parseInt(store.meta("total", "0")),

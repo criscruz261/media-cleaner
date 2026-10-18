@@ -61,7 +61,8 @@ public final class ScanService extends Service {
     String album = intent == null ? store.meta("album", "") : intent.getStringExtra("album");
     if (album == null) album = "";
     String selected = album;
-    executor.submit(() -> scan(selected));
+    boolean forceRescan = intent != null && intent.getBooleanExtra("force_rescan", false);
+    executor.submit(() -> scan(selected, forceRescan));
     return START_NOT_STICKY;
   }
 
@@ -78,13 +79,14 @@ public final class ScanService extends Service {
     getSystemService(NotificationManager.class).notify(1, notification(text));
   }
 
-  private void scan(String album) {
+  private void scan(String album, boolean forceRescan) {
     int processed = 0, errors = 0, cached = 0;
     try {
       store.put("status", "running");
       activity("Discovering accessible photos and videos…");
       List<Media> discovered = MediaRepository.discover(this, album, this::check);
       check();
+      if (forceRescan) store.invalidateAnalysis(discovered);
       store.begin(album, discovered.size());
       Matcher matcher = new Matcher();
       for (Media media : discovered) {
@@ -138,14 +140,15 @@ public final class ScanService extends Service {
       store.put("activity", "Scan complete. Compare media and choose what to keep.");
     } catch (Stopped stopped) {
       store.put("status", "paused");
-      store.put("activity", "Paused. Completed files are saved; Resume skips unchanged media.");
+      store.put(
+          "activity", "Paused. Completed files are saved; Continue Scan skips unchanged media.");
     } catch (Exception failure) {
       store.put("status", "interrupted");
       store.put(
           "activity",
           "Scan interrupted: "
               + failure.getClass().getSimpleName()
-              + ". Check permissions and Resume.");
+              + ". Check permissions and use Continue Scan.");
     } finally {
       store.touch();
       running.set(false);

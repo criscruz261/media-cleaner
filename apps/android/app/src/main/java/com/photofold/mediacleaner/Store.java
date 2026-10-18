@@ -55,8 +55,20 @@ final class Store extends SQLiteOpenHelper {
   synchronized void recover() {
     if (meta("status", "").equals("running")) {
       put("status", "interrupted");
-      put("activity", "Scan interrupted. Choose Resume to use saved file checkpoints.");
+      put("activity", "Scan interrupted. Choose Continue Scan to use saved file checkpoints.");
       touch();
+    }
+  }
+
+  synchronized void invalidateAnalysis(List<Media> files) {
+    SQLiteDatabase db = getWritableDatabase();
+    db.beginTransaction();
+    try {
+      for (Media file : files)
+        db.execSQL("UPDATE files SET ready=0 WHERE uri=?", new Object[] {file.uri});
+      db.setTransactionSuccessful();
+    } finally {
+      db.endTransaction();
     }
   }
 

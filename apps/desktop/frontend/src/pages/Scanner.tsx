@@ -11,7 +11,6 @@ import {
 import {
   LoaderCircle,
   FolderOpen,
-  Play,
   Pause,
   Square,
   ArrowRight,
@@ -55,6 +54,7 @@ export function Scanner({
     () => saveLocal("media-cleaner.scan-thumbnails", showThumbnails),
     [showThumbnails],
   );
+  const [continueScan, setContinueScan] = useState(false);
   const [draft] = useState(loadDraft);
   const [roots, setRoots] = useState(draft.roots),
     [excluded, setExcluded] = useState(draft.excluded),
@@ -92,7 +92,7 @@ export function Scanner({
       !["queued", "running"].includes(scan.data?.status ?? "running"),
   });
   const start = useMutation({
-    mutationFn: () =>
+    mutationFn: (forceRescan: boolean) =>
       api<Scan>("/scans", {
         roots: roots
           .split("\n")
@@ -104,6 +104,7 @@ export function Scanner({
           .map((s) => s.trim())
           .filter(Boolean),
         include_hidden: hidden,
+        force_rescan: forceRescan,
         mode,
         sensitivity,
       }),
@@ -130,6 +131,12 @@ export function Scanner({
     },
   });
   const active = ["queued", "running"].includes(scan.data?.status ?? "");
+  const hasCheckpoint = [
+    "paused",
+    "interrupted",
+    "failed",
+    "completed",
+  ].includes(scan.data?.status ?? "");
   return (
     <div className="scanner-page">
       <div className="page-heading">
@@ -166,7 +173,11 @@ export function Scanner({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            start.mutate();
+            if (continueScan) {
+              if (!hasCheckpoint) return;
+              if (scan.data?.status === "completed") start.mutate(false);
+              else control.mutate("resume");
+            } else start.mutate(true);
           }}
         >
           <div className="section-heading">
@@ -270,9 +281,59 @@ export function Scanner({
               All analysis stays local. Similar-media results require manual
               review; exact copies are verified with SHA-256.
             </p>
-            <button className="primary" disabled={active || start.isPending}>
-              Start scan <ArrowRight size={16} />
-            </button>
+            <div className="scan-split-button">
+              <button
+                className="primary"
+                disabled={
+                  active ||
+                  start.isPending ||
+                  control.isPending ||
+                  (continueScan && !hasCheckpoint)
+                }
+                formNoValidate={continueScan}
+              >
+                {continueScan ? "Continue Scan" : "Scan"}{" "}
+                <ArrowRight size={16} />
+              </button>
+              <details className="scan-options">
+                <summary aria-label="Scan options">▾</summary>
+                <div className="scan-options-menu">
+                  <button
+                    type="button"
+                    disabled={active || start.isPending || control.isPending}
+                    onClick={(event) => {
+                      event.currentTarget
+                        .closest("details")
+                        ?.removeAttribute("open");
+                      setContinueScan(false);
+                    }}
+                  >
+                    Scan
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      active ||
+                      start.isPending ||
+                      control.isPending ||
+                      !hasCheckpoint
+                    }
+                    onClick={(event) => {
+                      event.currentTarget
+                        .closest("details")
+                        ?.removeAttribute("open");
+                      setContinueScan(true);
+                    }}
+                  >
+                    Continue Scan
+                  </button>
+                  <p className="hint">
+                    Scan recomputes analysis. Continue Scan uses saved
+                    checkpoints and analysis.
+                  </p>
+                </div>
+              </details>
+            </div>
           </div>
           <ErrorMessage error={start.error} />
         </form>
@@ -433,7 +494,7 @@ export function Scanner({
                   . Completed-file analysis and selections are also saved in
                   .media-cleaner-cache inside each selected folder. Refreshing
                   this page does not stop the scan. After a backend restart,
-                  choose Resume; an unfinished file starts again safely.
+                  choose Continue Scan; an unfinished file starts again safely.
                 </p>
               </div>
             </details>
@@ -497,12 +558,6 @@ export function Scanner({
                   scan.data.status,
                 ) ? (
                 <>
-                  <button
-                    disabled={control.isPending}
-                    onClick={() => control.mutate("resume")}
-                  >
-                    <Play size={15} /> Resume
-                  </button>
                   <button onClick={() => control.mutate("stop")}>
                     Stop scan
                   </button>

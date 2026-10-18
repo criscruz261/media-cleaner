@@ -19,6 +19,14 @@ describe("scanner", () => {
         <Scanner scanId="" selectScan={select} navigate={vi.fn()} />
       </QueryClientProvider>,
     );
+    expect(
+      screen.queryByLabelText("Scan from scratch"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Scan options"));
+    expect(
+      screen.getByRole("button", { name: "Continue Scan" }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Scan options"));
     fireEvent.change(screen.getByLabelText(/Folder paths/), {
       target: { value: "/photos\n/Volumes/External" },
     });
@@ -28,12 +36,13 @@ describe("scanner", () => {
     expect(
       screen.getByRole("option", { name: /Similar photos, videos/ }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start scan" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Scan" })[0]);
     await waitFor(() => expect(select).toHaveBeenCalledWith("scan-id"));
     const body = JSON.parse(
       (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
         .body as string,
     );
+    expect(body.force_rescan).toBe(true);
     expect(body.mode).toBe("similar");
     expect(body.sensitivity).toBe("balanced");
     expect(body.roots).toEqual(["/photos", "/Volumes/External"]);
@@ -101,3 +110,82 @@ it("toggles processing thumbnails in Current scan and remembers the preference",
     localStorage.removeItem("media-cleaner.scan-thumbnails");
   }
 });
+
+it.each(["paused", "completed"])(
+  "continues a %s scan using saved work",
+  async (status) => {
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => ({
+      ok: true,
+      json: async () =>
+        url.includes("/matches") || url.includes("/warnings")
+          ? { items: [], total: 0, exact_groups: 0, similar_groups: 0 }
+          : {
+              id: "saved-scan",
+              status,
+              stage: "complete",
+              discovered: 2,
+              processed: 1,
+              bytes_processed: 10,
+              total_bytes: 20,
+              cache_hits: 0,
+              errors: 0,
+              options: { roots: ["/photos"] },
+              activity: [],
+            },
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const view = render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <Scanner scanId="saved-scan" selectScan={vi.fn()} navigate={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    try {
+      await screen.findAllByText(status === "paused" ? "Paused" : "Completed");
+      const setup = view.container.querySelector("details.scanner-setup")!;
+      setup.setAttribute("open", "");
+      fireEvent.click(screen.getByLabelText("Scan options"));
+      fireEvent.click(screen.getByRole("button", { name: "Continue Scan" }));
+      expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(
+        false,
+      );
+      const mainButton = view.container.querySelector<HTMLButtonElement>(
+        ".scan-split-button > button",
+      )!;
+      expect(mainButton).toHaveTextContent("Continue Scan");
+      fireEvent.click(screen.getByLabelText("Scan options"));
+      fireEvent.click(screen.getByRole("button", { name: "Scan" }));
+      expect(mainButton).toHaveTextContent(/^Scan$/);
+      expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(
+        false,
+      );
+      fireEvent.click(screen.getByLabelText("Scan options"));
+      fireEvent.click(screen.getByRole("button", { name: "Continue Scan" }));
+      fireEvent.click(mainButton);
+      await waitFor(() =>
+        expect(
+          fetch.mock.calls.some(
+            ([url, init]) =>
+              init?.method === "POST" &&
+              url ===
+                (status === "paused"
+                  ? "/api/v1/scans/saved-scan/resume"
+                  : "/api/v1/scans"),
+          ),
+        ).toBe(true),
+      );
+      if (status === "completed") {
+        const [, request] = fetch.mock.calls.find(
+          ([url, init]) => url === "/api/v1/scans" && init?.method === "POST",
+        )!;
+        expect(JSON.parse(request!.body as string).force_rescan).toBe(false);
+      }
+    } finally {
+      view.unmount();
+      vi.unstubAllGlobals();
+    }
+  },
+);

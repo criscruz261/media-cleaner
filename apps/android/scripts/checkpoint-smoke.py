@@ -75,7 +75,9 @@ assert adb("emu", "avd", "name").splitlines()[0] == "media-cleaner-test", (
 close_at_checkpoint()
 adb("shell", "am", "start", "-n", PACKAGE + "/.MainActivity")
 tap(find("Scanner", button=True))
-tap(find("Resume", button=True))
+tap(find("Scan options", button=True))
+tap(find("Continue Scan"))
+tap(find("Continue Scan", button=True))
 find("Scan complete.", timeout=90)
 close_at_checkpoint()
 print(

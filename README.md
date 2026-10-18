@@ -65,10 +65,23 @@ Setup installs the pinned Python dependencies, the editable backend, frontend de
 
 FFmpeg/FFprobe are installed during setup or can be provided on PATH. ExifTool is optional for richer metadata. Scanning never downloads tools. See [dependencies](docs/dependencies.md). Missing tools and skipped comparisons are shown in Settings and the scanner’s paginated warnings list. Exact hashing works without them. Native folder dialogs use macOS AppleScript, Windows FolderBrowserDialog, or Linux Zenity/KDialog; paste paths when a dialog is unavailable.
 
+## Scan and Continue Scan
+
+Choose a mode in the dropdown to update the button label, then press the main
+button to start. Selecting a dropdown item does not start scanning.
+
+Android and desktop offer a **Scan** button with a dropdown for **Continue Scan**.
+Scan recomputes hashes and visual analysis, bypassing saved analysis and checkpoints.
+Continue Scan resumes a paused/interrupted checkpoint, or reuses valid analysis
+from a completed scan. Desktop continuation after completion uses the current
+folder and scan options; Android continues the saved media selection.
+Desktop bypasses database and `.media-cleaner-cache` analysis for fresh scans.
+New results are cached normally. Source media and cleanup history are preserved.
+
 ## Use
 
 1. In **Scanner**, add one or more folders (including mounted external/network drives), choose Similar photos, videos & animations (default), or an exact-only all-media/image/video mode, and set exclusions. Similar sensitivity can be strict, balanced, or broad. Analysis reads media and writes checkpoints to `.media-cleaner-cache` inside each selected root. It does not modify media files.
-2. Watch file/byte progress, current-file activity, and exact/similar groups as they are found on **Scanner**. Refreshing reconnects to the same running scan. Completed files and explicit selections are saved automatically to the app database and a hidden `.media-cleaner-cache` in each selected folder; after a backend restart, choose **Resume** to continue from those checkpoints. Pause and cancel are also available. See [live progress and recovery](docs/scan-progress.md).
+2. Watch file/byte progress, current-file activity, and exact/similar groups as they are found on **Scanner**. Refreshing reconnects to the same running scan. Completed files and explicit selections are saved automatically to the app database and a hidden `.media-cleaner-cache` in each selected folder; after a backend restart, choose **Continue Scan** to continue from those checkpoints. Pause and cancel are also available. See [live progress and recovery](docs/scan-progress.md).
 3. In **Duplicate review**, choose a scan and inspect side-by-side previews and SHA-256, photo-hash or time-spaced frame evidence. Use **Compare videos together** in Scanner or Duplicate review to open every video in a group, then **Play all from start**, **Pause all**, or **Reset all**. Comparison starts muted; unmute individual players to check audio before deciding what to remove. Buffering may affect playback timing. The comparison window has **Select for deletion** checkboxes; choices are saved to the group. Close the window to preview and confirm cleanup. Every similar-media group starts with all files kept; select unwanted versions for deletion. A file can appear in both an exact group and a similar group. Exact groups retain one suggested keeper, preferring the original filename when identifiable, and pre-select the remaining copies for deletion. Protected files stay kept.
 4. Groups on **Scanner**, during and after scanning, show **Select for deletion** checkboxes and a per-group **Delete selected** button. **Duplicate review** uses the same **Select for deletion** checkboxes: check unwanted files, then choose **Delete selected**. Changes save automatically; no separate mark-reviewed action is needed. Batch cleanup includes pre-selected exact copies and your selections in similar groups matching the current filter across every page. Video cards show generated thumbnails before playback. This creates a dry run for the selected files **across every member page in the group**. Large groups are paginated, 50 members per page.
 5. Choose OS Trash/Recycle Bin (default) or same-volume quarantine. Review the source paths, retained copies and size, check the explicit confirmation box, then confirm cleanup. No permanent deletion endpoint exists. Trash failure never silently falls back to quarantine or deletion.

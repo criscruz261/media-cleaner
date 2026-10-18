@@ -321,7 +321,12 @@ class JobManager:
                 if similar
                 else None
             )
-        portable = folder_cache.read(path, options["roots"], key)
+            # Resume may reuse this job's completed checkpoints, while new files
+            # in a from-scratch scan must bypass both database and folder caches.
+            recompute = options.get("force_rescan", False) and not was_ready
+            if recompute:
+                cached = previous = None
+        portable = None if recompute else folder_cache.read(path, options["roots"], key)
         if portable:
             if not cached:
                 cached = SimpleNamespace(

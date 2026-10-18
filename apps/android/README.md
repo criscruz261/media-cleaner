@@ -34,8 +34,16 @@ The checkpoint-and-shutdown action is red. Scan progress stays visible
 across sections and inside media previews. Switching sections preserves review
 selections, filters, expanded groups, and each section's scroll position.
 
-Scanner uses three steps: **Choose media → Scan or resume → Review matches**.
-Media selection appears before the access button. Scan and Resume share a row;
+Choose a scan mode from the dropdown, then press the main button to start.
+Selecting a mode only updates the label.
+
+Scanner uses three steps: **Choose media → Scan → Review matches**.
+The **Scan** button always recomputes hashes and visual analysis for selected
+media. Its dropdown offers **Continue Scan** when a saved scan exists, reusing
+completed analysis and continuing the saved media selection. New results replace
+analysis progressively; media and cleanup history are preserved.
+
+Media selection appears before the access button. Scan has a dropdown;
 checkpoint controls remain available, with shutdown under expandable Session
 options. Contextual guidance explains when matches can be reviewed.
 
@@ -61,7 +69,7 @@ the desktop's organization while showing only features available on Android.
 
 1. Install the debug APK from `app/build/outputs/apk/debug/app-debug.apk` on your Android phone (transfer the file and open it; Android may ask you to allow installation from that file manager).
 2. Allow photo/video access. Choose all accessible media or an album, then **Scan**.
-3. Watch live groups, file progress, cache reuse and skipped-file warnings. **Pause** and **Resume** preserve completed-file checkpoints. Closing the activity does not stop the foreground scan; a process restart leaves the job available for explicit Resume.
+3. Watch live groups, file progress, cache reuse and skipped-file warnings. **Pause** and **Continue Scan** preserve completed-file checkpoints. Closing the activity does not stop the foreground scan; a process restart leaves the job available for explicit Continue Scan.
 4. Inspect thumbnails and full previews. **Compare similar videos** provides muted playback, shared play/pause/reset and deletion checkboxes. It pages through up to four simultaneous players to respect phone decoder limits. Unmute individual players to check audio.
 5. Select unwanted files in a group and choose **Delete selected**. Use **Select all for deletion (keep none)** to remove the whole group; RAW and possible photo/video companion files are protected. Similar groups initially keep every item. Unambiguous copy filenames receive an advisory original recommendation after completion; explicit choices take priority.
 For multiple groups, make selections in each, then use **Delete selected across groups** above the groups. This includes groups with explicit choices outside the visible page and excludes untouched suggestions. One combined preview and Android confirmation covers up to 100 distinct files, including keep-none groups.
@@ -166,4 +174,4 @@ Tap a group thumbnail to open a screen-fitting preview. **Previous/Next** naviga
 
 New matching groups append at the end in first-seen order. Updates replace only the changed group card, preserving unaffected cards and expanded groups. Scan progress remains pinned above the scrolling results and appears inside photo/video review dialogs, with a reminder that groups may change during scanning.
 
-**Save checkpoint** waits for the scanner to pause and finish saving completed work. **Resume** rechecks access and continues using unchanged completed files. **Save checkpoint and close** asks for confirmation, waits for the checkpoint, stops the scan service, and closes the app task. Resolve any pending Trash/restore confirmation before using this action.
+**Save checkpoint** waits for the scanner to pause and finish saving completed work. **Continue Scan** rechecks access and continues using unchanged completed files. **Save checkpoint and close** asks for confirmation, waits for the checkpoint, stops the scan service, and closes the app task. Resolve any pending Trash/restore confirmation before using this action.

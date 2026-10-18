@@ -247,7 +247,11 @@ with tempfile.TemporaryDirectory(prefix="android-media-fixture-") as temp:
     ), groups
     db.close()
     print("Checking persisted file checkpoint reuse", flush=True)
-    launch(scan=True)
+    launch()
+    navigate("Scanner")
+    tap(find("Scan options", button=True))
+    tap(find("Continue Scan"))
+    tap(find("Continue Scan", button=True))
     find("Scan complete.", timeout=90)
     db = snapshot()
     meta = dict(db.execute("SELECT key,value FROM meta"))
