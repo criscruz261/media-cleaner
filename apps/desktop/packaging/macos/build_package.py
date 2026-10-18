@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from importlib import metadata
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from pathlib import Path
 def main():
     if sys.platform != "darwin":
         raise SystemExit("macOS packaging must run on macOS.")
+    version = datetime.now().strftime("%y%m%d%H%M")
+    app_name = f"MediaCleaner-{version}"
     root = Path(__file__).resolve().parents[4]
     backend = root / "apps/desktop/backend"
     frontend = root / "apps/desktop/frontend/dist"
@@ -43,7 +46,7 @@ def main():
             "--onedir",
             "--windowed",
             "--name",
-            "MediaCleaner",
+            app_name,
             "--osx-bundle-identifier",
             "com.mediacleaner.desktop",
             "--distpath",
@@ -79,7 +82,7 @@ def main():
             command += ["--collect-all", package]
         command += [str(Path(__file__).with_name("launcher.py"))]
         subprocess.run(command, check=True, cwd=root)
-        bundle = work / "dist/MediaCleaner.app"
+        bundle = work / "dist" / f"{app_name}.app"
         # Preserve installed distribution metadata, including available license files.
         licenses = bundle / "Contents/Resources/third-party-licenses"
         licenses.mkdir()
@@ -100,6 +103,7 @@ def main():
         (bundle / "Contents/Resources/build-info.json").write_text(
             json.dumps(
                 {
+                    "version": version,
                     "python": sys.version,
                     "architecture": platform.machine(),
                     "packages": versions,
@@ -112,6 +116,8 @@ def main():
             Path(__file__).with_name("README.txt"),
             bundle / "Contents/Resources/README.txt",
         )
+        readme = bundle / "Contents/Resources/README.txt"
+        readme.write_text(readme.read_text().replace("MediaCleaner.app", f"{app_name}.app"), encoding="utf-8")
         # Added notices change the sealed resources; sign the completed bundle again.
         subprocess.run(
             ["codesign", "--force", "--deep", "--sign", "-", str(bundle)], check=True
@@ -128,7 +134,7 @@ def main():
         env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
         env.pop("MEDIA_CLEANER_DATA", None)
         subprocess.run(
-            [str(bundle / "Contents/MacOS/MediaCleaner"), "--smoke-test"],
+            [str(bundle / "Contents/MacOS" / app_name), "--smoke-test"],
             cwd=work,
             env=env,
             check=True,
@@ -151,8 +157,10 @@ def main():
         if target.exists():
             shutil.rmtree(target)
         staged.rename(target)
-        shutil.copy2(Path(__file__).with_name("README.txt"), output / "README.txt")
-        print(f"macOS package ready: {target}")
+        shutil.copy2(target / "Contents/Resources/README.txt", output / "README.txt")
+        archive = output / f"{app_name}-macOS.zip"
+        subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(target), str(archive)], check=True)
+        print(f"macOS package ready: {archive}")
 
 
 if __name__ == "__main__":

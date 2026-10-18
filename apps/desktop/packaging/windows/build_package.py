@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from importlib import metadata
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from pathlib import Path
 def main():
     if sys.platform != "win32":
         raise SystemExit("Windows packaging must run on Windows.")
+    version = datetime.now().strftime("%y%m%d%H%M")
+    app_name = f"MediaCleaner-{version}"
     root = Path(__file__).resolve().parents[4]
     backend = root / "apps/desktop/backend"
     frontend = root / "apps/desktop/frontend/dist"
@@ -33,7 +36,7 @@ def main():
             if not source:
                 raise RuntimeError(f"Missing {name} after tool installation")
             shutil.copy2(source, tools / (name + ".exe"))
-        command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--console", "--name", "MediaCleaner",
+        command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--console", "--name", app_name,
                    "--distpath", str(work / "dist"), "--workpath", str(work / "work"), "--specpath", str(work),
                    "--paths", str(backend), "--add-data", f"{frontend};frontend",
                    "--add-data", f"{backend / 'migrations'};migrations", "--add-data", f"{tools};media-tools"]
@@ -41,7 +44,7 @@ def main():
             command += ["--collect-all", package]
         command += [str(Path(__file__).with_name("launcher.py"))]
         subprocess.run(command, check=True, cwd=root)
-        bundle = work / "dist/MediaCleaner"
+        bundle = work / "dist" / app_name
         # Preserve installed distribution metadata, including available license files.
         licenses = bundle / "third-party-licenses"
         licenses.mkdir()
@@ -56,16 +59,18 @@ def main():
                         destination = licenses / str(file)
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(source, destination)
-        (bundle / "build-info.json").write_text(json.dumps({"python": sys.version, "architecture": platform.machine(), "packages": versions}, indent=2), encoding="utf-8")
+        (bundle / "build-info.json").write_text(json.dumps({"version": version, "python": sys.version, "architecture": platform.machine(), "packages": versions}, indent=2), encoding="utf-8")
         shutil.copy2(Path(__file__).with_name("README.txt"), bundle / "README.txt")
+        readme = bundle / "README.txt"
+        readme.write_text(readme.read_text().replace("MediaCleaner.exe", f"{app_name}.exe"), encoding="utf-8")
         # Run outside the repository and without developer Python/Node on PATH.
         import os
         env = dict(os.environ)
         env.pop("PYTHONPATH", None)
         env.pop("PYTHONHOME", None)
         env["PATH"] = str(Path(env.get("SystemRoot", "C:/Windows")) / "System32")
-        subprocess.run([str(bundle / "MediaCleaner.exe"), "--smoke-test"], cwd=work, env=env, check=True, timeout=120)
-        output = root / "deployment-package/windows"
+        subprocess.run([str(bundle / f"{app_name}.exe"), "--smoke-test"], cwd=work, env=env, check=True, timeout=120)
+        output = root / "deployment-package/windows" / app_name
         output.mkdir(parents=True, exist_ok=True)
         # Replace only build-owned paths. Keep .gitkeep and unrelated files.
         for item in bundle.iterdir():
@@ -78,7 +83,8 @@ def main():
                 shutil.copytree(item, target)
             else:
                 shutil.copy2(item, target)
-        print(f"Windows package ready: {output}")
+        archive = shutil.make_archive(str(output), "zip", root_dir=output.parent, base_dir=output.name)
+        print(f"Windows package ready: {archive}")
 
 
 if __name__ == "__main__":
