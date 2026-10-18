@@ -66,7 +66,9 @@ public final class MainActivity extends Activity {
   private final Set<String> expandedGroups = new HashSet<>();
   private final List<TextView> reviewProgress = new ArrayList<>();
   private TextView groupCount, emptyGroups;
-  private Button batchDelete, moreGroups, reviewStart;
+  private Button batchDelete, reviewStart;
+  private Spinner showGroups;
+  private List<Integer> groupLimits = List.of();
   private TextView progress, activity, access;
   private ProgressBar bar;
   private static final String[] SENSITIVITY_KEYS = {
@@ -480,6 +482,23 @@ public final class MainActivity extends Activity {
         };
     filter.setOnItemSelectedListener(options);
     sort.setOnItemSelectedListener(options);
+    LinearLayout countField = field(body, "Show groups");
+    showGroups = new Spinner(this);
+    showGroups.setContentDescription("Show groups");
+    countField.addView(showGroups, new LinearLayout.LayoutParams(-1, dp(48)));
+    showGroups.setOnItemSelectedListener(
+        new AdapterView.OnItemSelectedListener() {
+          public void onNothingSelected(AdapterView<?> parent) {}
+
+          public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            if (position < 0 || position >= groupLimits.size()) return;
+            int selected = groupLimits.get(position);
+            if (selected == limit) return;
+            limit = selected;
+            stamp = "";
+            if (groups != null) refresh();
+          }
+        });
     body = pageBody("Review");
     heading(body, "2. Compare and select", 18);
     hint(body, "Open a thumbnail to compare. Green keeps a file; red selects it for deletion.");
@@ -491,15 +510,6 @@ public final class MainActivity extends Activity {
     groups.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> layoutGroups());
     body.addView(groups, new LinearLayout.LayoutParams(-1, -2));
     groupCount = label(body, "");
-    moreGroups =
-        button(
-            body,
-            "Show more groups",
-            () -> {
-              limit += 5;
-              stamp = "";
-              refresh();
-            });
     body = card(pageBody("Review"));
     heading(body, "3. Clean up selections", 18);
     hint(
@@ -1152,9 +1162,9 @@ public final class MainActivity extends Activity {
             };
     updateHeaderSummary();
     batchDelete.setEnabled(!cleanupBusy && !selectedFiles.isEmpty());
-    List<Store.Group> found = store.groups(limit, groupFilter, groupSort);
     int filteredCount = store.groupCount(groupFilter);
-    moreGroups.setVisibility(found.size() < filteredCount ? View.VISIBLE : View.GONE);
+    updateGroupLimits(filteredCount);
+    List<Store.Group> found = store.groups(limit, groupFilter, groupSort);
     reviewStart.setVisibility(!active && store.groupCount("") == 0 ? View.VISIBLE : View.GONE);
     groupCount.setVisibility(filteredCount > 0 ? View.VISIBLE : View.GONE);
     StringBuilder identity = new StringBuilder();
@@ -1237,6 +1247,42 @@ public final class MainActivity extends Activity {
     groupCount.setText(
         "Showing " + found.size() + " of " + store.groupCount(groupFilter) + " matching groups");
     renderHistory();
+  }
+
+  private void updateGroupLimits(int total) {
+    List<Integer> choices = new ArrayList<>();
+    List<String> labels = new ArrayList<>();
+    for (int count : new int[] {5, 10, 20, 50, 100}) {
+      if (count < total) {
+        choices.add(count);
+        labels.add(String.valueOf(count));
+      }
+    }
+    // Keep “all” selected as scanning discovers groups or cleanup removes them.
+    choices.add(total > 0 ? Integer.MAX_VALUE : 5);
+    labels.add(total > 0 ? total + " (All)" : "5");
+    int selected = choices.indexOf(limit);
+    if (selected < 0) {
+      selected = choices.size() - 1;
+      for (int i = 0; i < choices.size(); i++) {
+        if (choices.get(i) >= limit) {
+          selected = i;
+          break;
+        }
+      }
+      limit = choices.get(selected);
+    }
+    List<String> current = new ArrayList<>();
+    if (showGroups.getAdapter() != null) {
+      for (int i = 0; i < showGroups.getAdapter().getCount(); i++)
+        current.add(String.valueOf(showGroups.getAdapter().getItem(i)));
+    }
+    groupLimits = choices;
+    if (!current.equals(labels))
+      showGroups.setAdapter(
+          new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
+    showGroups.setSelection(selected);
+    showGroups.setEnabled(total > 0);
   }
 
   private String sentence(String value) {
