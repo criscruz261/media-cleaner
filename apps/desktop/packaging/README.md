@@ -2,7 +2,7 @@
 
 ## Portable Windows build
 
-From Windows PowerShell at the repository root, run `./scripts/windows/3-create-deploy-package.ps1`.
+From Windows PowerShell at the repository root, run `./scripts/windows/4-create-deploy-package.ps1`.
 This reruns desktop setup, builds the frontend, installs pinned PyInstaller, and
 bundles a console launcher, Python dependencies, frontend, database migrations,
 FFmpeg and FFprobe. It verifies the frozen app with a temporary database and

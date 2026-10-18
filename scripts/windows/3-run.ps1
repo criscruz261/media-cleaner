@@ -1,3 +1,4 @@
 $ErrorActionPreference = 'Stop'
-& "$PSScriptRoot\2-run.ps1" @args
+$Project = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+& "$Project/apps/desktop/platforms/windows/run.ps1" @args
 exit $LASTEXITCODE
