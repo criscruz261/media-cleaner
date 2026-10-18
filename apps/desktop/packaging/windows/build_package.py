@@ -14,7 +14,7 @@ def main():
     if sys.platform != "win32":
         raise SystemExit("Windows packaging must run on Windows.")
     version = datetime.now().strftime("%y%m%d%H%M")
-    app_name = f"MediaCleaner-{version}"
+    app_name = f"MediaCleaner-{version}-windows"
     root = Path(__file__).resolve().parents[4]
     backend = root / "apps/desktop/backend"
     frontend = root / "apps/desktop/frontend/dist"

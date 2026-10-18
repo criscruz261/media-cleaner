@@ -15,7 +15,7 @@ def main():
     if sys.platform != "darwin":
         raise SystemExit("macOS packaging must run on macOS.")
     version = datetime.now().strftime("%y%m%d%H%M")
-    app_name = f"MediaCleaner-{version}"
+    app_name = f"MediaCleaner-{version}-macOS"
     root = Path(__file__).resolve().parents[4]
     backend = root / "apps/desktop/backend"
     frontend = root / "apps/desktop/frontend/dist"
@@ -158,7 +158,7 @@ def main():
             shutil.rmtree(target)
         staged.rename(target)
         shutil.copy2(target / "Contents/Resources/README.txt", output / "README.txt")
-        archive = output / f"{app_name}-macOS.zip"
+        archive = output / f"{app_name}.zip"
         subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(target), str(archive)], check=True)
         print(f"macOS package ready: {archive}")
 

@@ -5,7 +5,7 @@ Run from the repository root on macOS:
 1. `./scripts/macOS/1-setup.sh` — install Python/frontend dependencies, packaging tools, FFmpeg and FFprobe.
 2. `./scripts/macOS/2-build.sh` — build the frontend and backend wheel.
 3. `./scripts/macOS/3-run.sh` — run locally; open the printed launch link.
-4. `./scripts/macOS/4-create-deploy-package.sh` — rebuild and create `deployment-package/macOS/MediaCleaner.app`.
+4. `./scripts/macOS/4-create-deploy-package.sh` — rebuild and create `deployment-package/macOS/MediaCleaner-YYMMDDHHMM-macOS.app`.
 
 Build each component independently with `2.a-build-frontend.sh` or
 `2.b-build-backend.sh`. Setup requires Python 3.12+ and Node 22.12+ with npm

@@ -16,5 +16,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller installation failed.' }
 & $Python "$ProjectRoot\apps\desktop\packaging\windows\build_package.py"
 if ($LASTEXITCODE -ne 0) { throw 'Windows packaging or smoke test failed. See output above.' }
-Write-Host 'Ready: deployment-package\windows\MediaCleaner-YYMMDDHHMM.zip'
+Write-Host 'Ready: deployment-package\windows\MediaCleaner-YYMMDDHHMM-windows.zip'
 Write-Host 'Extract the ZIP and copy the ENTIRE extracted folder to the other Windows PC.'

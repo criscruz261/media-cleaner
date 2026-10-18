@@ -31,4 +31,4 @@ Portable bundles still require clean-machine and release validation before publi
 See [the macOS workflow](../platforms/macos/README.md). Run
 `./scripts/macOS/1-setup.sh`, then
 `./scripts/macOS/4-create-deploy-package.sh` to create the self-contained,
-ad-hoc signed `deployment-package/macOS/MediaCleaner.app`.
+ad-hoc signed `deployment-package/macOS/MediaCleaner-YYMMDDHHMM-macOS.app`.

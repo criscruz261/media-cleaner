@@ -136,7 +136,7 @@ Setup downloads checksum-verified JDK 21 and Android SDK 35 into ignored `.tools
 
 `./setup-andriod.sh` is an alias for the requested spelling. Use `./setup-android.sh --accept-licenses` only after agreeing to [Google's SDK license](https://developer.android.com/studio#terms-and-conditions). Add `--emulator` to also download the optional Android 35 ARM64 emulator/system image (several GB); it is not required to build an APK. `PYTHON=/path/to/python3.12` can select the bootstrap interpreter.
 
-The root build runs matching tests, APK compilation and Android lint, then copies the APK and SHA-256 checksum to `.tools/dist/media-cleaner-android-debug.apk` and `.tools/dist/media-cleaner-android-debug.apk.sha256`. It accepts Gradle options, for example `./build-android.sh --offline` after dependencies have been downloaded. Both root scripts work when called from another directory. Downloaded tools, build caches and APKs are ignored by Git; a new clone downloads them again. No build tools are downloaded at app runtime.
+The root build runs matching tests, APK compilation and Android lint, then copies the APK and SHA-256 checksum to `.tools/dist/MediaCleaner-android-debug.apk` and `.tools/dist/MediaCleaner-android-debug.apk.sha256`. It accepts Gradle options, for example `./build-android.sh --offline` after dependencies have been downloaded. Both root scripts work when called from another directory. Downloaded tools, build caches and APKs are ignored by Git; a new clone downloads them again. No build tools are downloaded at app runtime.
 
 ## Boundaries and matching
 
@@ -205,3 +205,5 @@ retains whole-image hash matching. This is visual similarity, not identity
 verification, and every approximate match still needs review. Video samples use
 the same features. Old descriptors are re-analyzed once for the new model.
 See [subject matching](../../docs/subject-matching.md) for model provenance and thresholds.
+
+Deployment packages use `MediaCleaner-YYMMDDHHMM-android-debug.apk` (plus a SHA-256 checksum) in `deployment-package/android/`. The timestamp precedes the OS and build type so packages sort by build time.

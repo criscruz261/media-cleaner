@@ -7,7 +7,7 @@ if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
     exit 0
 fi
 version="$(date +%y%m%d%H%M)"
-name="media-cleaner-android-debug-$version"
+name="MediaCleaner-$version-android-debug"
 "$project_dir/scripts/android/2-build.sh" "$@"
 export JAVA_HOME="${JAVA_HOME:-$project_dir/.tools/android/jdk/Contents/Home}"
 sdk_dir="${ANDROID_HOME:-$project_dir/.tools/android/sdk}"
@@ -18,7 +18,7 @@ mkdir -p "$output"
 staging="$(mktemp -d "$output/.package-XXXXXXXX")"
 trap 'rm -rf -- "$staging"' EXIT
 cp "$apk" "$staging/${name}.apk"
-sed "s/media-cleaner-android-debug.apk/${name}.apk/g" "$project_dir/scripts/android/README-deployment.txt" > "$staging/README.txt"
+sed "s/MediaCleaner-android-debug.apk/${name}.apk/g" "$project_dir/scripts/android/README-deployment.txt" > "$staging/README.txt"
 (
     cd "$staging"
     shasum -a 256 "${name}.apk" > "${name}.apk.sha256"
