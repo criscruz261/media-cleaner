@@ -1,13 +1,12 @@
-import { Trash2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, X } from "lucide-react";
 import { VideoCompare } from "./VideoCompare";
-import { useCleanupDestination } from "./CleanupDestinationContext";
 import { usePopupKeyboard } from "./usePopupKeyboard";
 import { ScanProgress } from "./ScanProgress";
 import { createContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, prefix } from "../services/api";
-import type { Cleanup, Group, MediaFile } from "../types/api";
+import type { Group, MediaFile } from "../types/api";
 import { ErrorMessage } from "./ui";
 
 export const PreviewContext = createContext<
@@ -19,15 +18,12 @@ export function GroupPreview({
   initialId,
   onClose,
   scanId,
-  onPlan,
 }: {
   groupId: string;
   initialId: string;
   onClose: () => void;
   scanId?: string;
-  onPlan?: (plan: Cleanup) => void;
 }) {
-  const [destination] = useCleanupDestination();
   const [currentId, setCurrentId] = useState(initialId);
   const [zoom, setZoom] = useState(1);
   const [failed, setFailed] = useState(false);
@@ -63,33 +59,7 @@ export function GroupPreview({
     },
     onSettled: () => setPendingChoice(null),
   });
-  const selectAll = useMutation({
-    mutationFn: (keepAll: boolean) =>
-      api(
-        `/groups/${groupId}/review`,
-        keepAll ? { keep_all: true } : { keep_ids: [] },
-      ),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ["selection-summary"] });
-      return client.invalidateQueries({ queryKey: ["group", groupId] });
-    },
-  });
-  const selected = files.filter(
-    (item) => !item.keep && item.status === "ready",
-  );
-  const plan = useMutation({
-    mutationFn: () =>
-      api<Cleanup>("/cleanup/plan", {
-        group_id: groupId,
-        file_ids: selected.map((item) => item.id),
-        destination,
-      }),
-    onSuccess: (result) => {
-      onClose();
-      onPlan?.(result);
-    },
-  });
-  const busy = review.isPending || selectAll.isPending || plan.isPending;
+  const busy = review.isPending;
   const move = (direction: number) => {
     const next = files[index + direction];
     if (next) {
@@ -157,85 +127,14 @@ export function GroupPreview({
         }}
       >
         {scanId && <ScanProgress scanId={scanId} />}
-        <div className="group-preview-toolbar">
-          <button onClick={onClose}>Close preview</button>
-          <button disabled={index <= 0} onClick={() => move(-1)}>
-            Previous
-          </button>
-          <span aria-live="polite">
-            {index < 0 ? 0 : index + 1} / {files.length}
-          </span>
-          <button
-            disabled={index < 0 || index >= files.length - 1}
-            onClick={() => move(1)}
-          >
-            Next
-          </button>
-          <button
-            aria-label="Zoom out"
-            disabled={zoom <= 1}
-            onClick={() => setZoom((value) => Math.max(1, value - 0.25))}
-          >
-            −
-          </button>
-          <span>{Math.round(zoom * 100)}%</span>
-          <button
-            aria-label="Zoom in"
-            disabled={zoom >= 5}
-            onClick={() => setZoom((value) => Math.min(5, value + 0.25))}
-          >
-            +
-          </button>
-          <button onClick={() => setZoom(1)}>Fit to screen</button>
-          {file && (
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={
-                  !(pendingChoice?.id === file.id
-                    ? pendingChoice.keep
-                    : file.keep)
-                }
-                disabled={
-                  busy || !!file.protected_reason || file.status !== "ready"
-                }
-                onChange={() => {
-                  const choice = { id: file.id, keep: !file.keep };
-                  setPendingChoice(choice);
-                  review.mutate(choice);
-                }}
-              />
-              Select for deletion
-            </label>
-          )}
-        </div>
-        <div className="group-preview-actions" aria-label="Group actions">
-          <button
-            disabled={busy || !files.length}
-            className="action-keep"
-            onClick={() => selectAll.mutate(true)}
-          >
-            Unselect all for deletion (keep all)
-          </button>
-          <button
-            disabled={busy || !files.length}
-            className="action-select-delete"
-            onClick={() => selectAll.mutate(false)}
-          >
-            Select all for deletion (keep none)
-          </button>
-          <button
-            className="action-delete group-delete-selected"
-            disabled={busy || !selected.length || !onPlan}
-            onClick={() => plan.mutate()}
-          >
-            <Trash2 size={15} aria-hidden="true" /> Delete selected ·{" "}
-            {selected.length} in this group
-          </button>
-          {files.some((item) => item.media_type === "video") && (
-            <VideoCompare groupId={groupId} scanId={scanId} />
-          )}
-        </div>
+        <button
+          className="action-delete group-preview-close"
+          aria-label="Close preview"
+          title="Close preview"
+          onClick={onClose}
+        >
+          <X size={20} aria-hidden="true" />
+        </button>
         <strong className="group-preview-name">
           {file?.name ??
             (detail.isPending
@@ -297,9 +196,72 @@ export function GroupPreview({
             </p>
           ) : null}
         </div>
-        <ErrorMessage
-          error={detail.error || review.error || selectAll.error || plan.error}
-        />
+        <div className="group-preview-toolbar">
+          <button
+            aria-label="Zoom out"
+            title="Zoom out"
+            disabled={zoom <= 1}
+            onClick={() => setZoom((value) => Math.max(1, value - 0.25))}
+          >
+            <ZoomOut size={18} aria-hidden="true" />
+          </button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button
+            aria-label="Zoom in"
+            title="Zoom in"
+            disabled={zoom >= 5}
+            onClick={() => setZoom((value) => Math.min(5, value + 0.25))}
+          >
+            <ZoomIn size={18} aria-hidden="true" />
+          </button>
+          <button title="Fit to screen" onClick={() => setZoom(1)}>
+            <Maximize size={18} aria-hidden="true" /> Fit to screen
+          </button>
+          {file && (
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={
+                  !(pendingChoice?.id === file.id
+                    ? pendingChoice.keep
+                    : file.keep)
+                }
+                disabled={
+                  busy || !!file.protected_reason || file.status !== "ready"
+                }
+                onChange={() => {
+                  const choice = { id: file.id, keep: !file.keep };
+                  setPendingChoice(choice);
+                  review.mutate(choice);
+                }}
+              />
+              Select for deletion
+            </label>
+          )}
+          <div
+            className="group-preview-navigation"
+            aria-label="File navigation"
+          >
+            <button disabled={index <= 0} onClick={() => move(-1)}>
+              Previous
+            </button>
+            <span aria-live="polite">
+              {index < 0 ? 0 : index + 1} / {files.length}
+            </span>
+            <button
+              disabled={index < 0 || index >= files.length - 1}
+              onClick={() => move(1)}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+        {files.some((item) => item.media_type === "video") && (
+          <div className="group-preview-actions">
+            <VideoCompare groupId={groupId} scanId={scanId} />
+          </div>
+        )}
+        <ErrorMessage error={detail.error || review.error} />
       </section>
     </div>,
     document.body,

@@ -1,3 +1,4 @@
+import { ClearDeletionSelections } from "../components/ClearDeletionSelections";
 import { ScanHistory } from "../components/ScanHistory";
 import { useCompactGroups } from "../components/CompactGroupsContext";
 import { useCleanupDestination } from "../components/CleanupDestinationContext";
@@ -111,7 +112,9 @@ function ReviewResults({
           setSort(order);
           setOffset(0);
         }}
-      />
+      >
+        <ClearDeletionSelections scanId={scanId} />
+      </GroupFilters>
       {!scanId ? (
         <Empty title="Choose a scan to review">
           <button onClick={() => navigate("Scanner")}>
@@ -238,7 +241,6 @@ export function GroupCard({
           groupId={group.id}
           initialId={previewId}
           scanId={group.scan_id}
-          onPlan={onPlan}
           onClose={() => setPreviewId(null)}
         />
       )}

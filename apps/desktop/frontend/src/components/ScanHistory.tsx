@@ -233,16 +233,18 @@ export function ScanHistory({
             Delete {selected.length} selected scan history entries? Their saved
             review results will leave the history list.
           </p>
-          <button disabled={busy} onClick={() => setConfirming(false)}>
-            Cancel
-          </button>{" "}
-          <button
-            className="scan-history-delete"
-            disabled={busy}
-            onClick={() => remove.mutate()}
-          >
-            {remove.isPending ? "Deleting…" : "Confirm delete history"}
-          </button>
+          <div className="confirmation-actions">
+            <button disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>{" "}
+            <button
+              className="scan-history-delete"
+              disabled={busy}
+              onClick={() => remove.mutate()}
+            >
+              {remove.isPending ? "Deleting…" : "Confirm delete history"}
+            </button>
+          </div>
         </dialog>
       ) : null}
       {deleteFailure && (

@@ -117,14 +117,16 @@ export function Cleanup({
             I reviewed these files and confirm moving them to {plan.destination}
             .
           </label>
-          <button
-            className="primary"
-            disabled={!confirmed || execute.isPending}
-            onClick={() => execute.mutate()}
-          >
-            {execute.isPending ? "Validating and moving…" : "Confirm cleanup"}{" "}
-            <ArrowRight size={15} />
-          </button>
+          <div className="confirmation-actions">
+            <button
+              className="primary"
+              disabled={!confirmed || execute.isPending}
+              onClick={() => execute.mutate()}
+            >
+              {execute.isPending ? "Validating and moving…" : "Confirm cleanup"}{" "}
+              <ArrowRight size={15} />
+            </button>
+          </div>
           <ErrorMessage error={execute.error} />
         </section>
       )}

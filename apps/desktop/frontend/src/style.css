@@ -2709,3 +2709,68 @@ button.action-select-delete:hover:not(:disabled) {
   margin-left: auto;
   align-self: flex-end;
 }
+
+.group-toolbar:has(> .clear-deletion-selections) {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+}
+.group-toolbar > button.clear-deletion-selections {
+  order: 1;
+  justify-self: end;
+  padding: 6px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  width: auto;
+}
+.group-toolbar:has(> .clear-deletion-selections) > .hint { order: 2; }
+@media (max-width: 650px) {
+  .group-toolbar:has(> .clear-deletion-selections) { grid-template-columns: minmax(0, 1fr); }
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.group-toolbar:has(> .clear-deletion-selections) > label select,
+.group-toolbar > button.clear-deletion-selections {
+  height: 34px;
+  min-height: 34px;
+  box-sizing: border-box;
+}
+.group-toolbar > button.clear-deletion-selections {
+  align-self: end;
+  margin-bottom: 0;
+}
+
+.group-preview { position: relative; }
+.group-preview-toolbar { padding-right: 46px; }
+.group-preview button.group-preview-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  z-index: 2;
+}
+
+.group-preview-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.group-preview-toolbar {
+  padding: 10px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+.group-preview-name { padding-right: 46px; }

@@ -328,6 +328,33 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     def scan(scan_id: str):
         return get_scan(scan_id)
 
+    @app.post("/api/v1/scans/{scan_id}/clear-deletion-selections")
+    def clear_deletion_selections(scan_id: str, value: RestoreRequest):
+        if not value.confirmed:
+            raise ValueError("Confirm clearing deletion selections for this scan")
+        with manager.lock:
+            with sessions.begin() as session:
+                job = session.get(ScanJob, scan_id)
+                if not job or job.history_deleted:
+                    raise HTTPException(404, "Scan not found")
+                groups = session.scalars(select(DuplicateGroup).where(DuplicateGroup.scan_id == scan_id)).all()
+                ids = set()
+                for group in groups:
+                    for member in session.scalars(select(GroupMember).where(GroupMember.group_id == group.id)):
+                        member.keep = True
+                        ids.add(member.file_id)
+                        choice = session.get(FileReviewChoice, (member.file_id, group.classification))
+                        if choice:
+                            choice.keep = True
+                        else:
+                            session.add(FileReviewChoice(file_id=member.file_id, classification=group.classification, keep=True))
+                    group.evidence = dict(group.evidence, allow_keep_none=False)
+                    if group.review_status not in {"pending", "resolved"}:
+                        group.review_status = "reviewed"
+            for file_id in ids:
+                manager.save_folder_cache(scan_id, file_id)
+        return {"saved": True}
+
     @app.post("/api/v1/scans/{scan_id}/{action}")
     def control_scan(scan_id: str, action: str):
         if action in {"checkpoint", "stop"}:

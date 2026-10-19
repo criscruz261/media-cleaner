@@ -96,24 +96,26 @@ export function ShutdownControl({ onStopped }: { onStopped: () => void }) {
                 />
                 Save my checkpoint and shut down the app
               </label>
-              <button
-                className="primary"
-                disabled={!confirmed || stop.isPending}
-                onClick={() => stop.mutate()}
-              >
-                {stop.isPending
-                  ? "Saving checkpoint and stopping…"
-                  : "Confirm shutdown"}
-              </button>
-              <button
-                disabled={stop.isPending}
-                onClick={() => {
-                  setOpen(false);
-                  setConfirmed(false);
-                }}
-              >
-                Cancel
-              </button>
+              <div className="confirmation-actions">
+                <button
+                  className="primary"
+                  disabled={!confirmed || stop.isPending}
+                  onClick={() => stop.mutate()}
+                >
+                  {stop.isPending
+                    ? "Saving checkpoint and stopping…"
+                    : "Confirm shutdown"}
+                </button>
+                <button
+                  disabled={stop.isPending}
+                  onClick={() => {
+                    setOpen(false);
+                    setConfirmed(false);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
               <ErrorMessage error={stop.error} />
             </section>
           </div>,
