@@ -2774,3 +2774,27 @@ button.action-select-delete:hover:not(:disabled) {
   margin-top: 8px;
 }
 .group-preview-name { padding-right: 46px; }
+
+/* Leave room for the native dropdown arrow and the full text line. */
+select {
+  min-height: 36px;
+  padding: 7px 32px 7px 10px;
+  line-height: 20px;
+}
+select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+.group-toolbar select,
+.group-toolbar:has(> .clear-deletion-selections) > label select {
+  height: 36px;
+  min-height: 36px;
+  padding: 7px 32px 7px 10px;
+  line-height: 20px;
+}
+.group-toolbar > button.clear-deletion-selections { height: 36px; min-height: 36px; }
+@media (min-width: 651px) and (max-width: 1050px) {
+  .group-toolbar:has(> .clear-deletion-selections) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
