@@ -77,12 +77,13 @@ Choose a mode in the dropdown to update the button label, then press the main
 button to start. Selecting a dropdown item does not start scanning.
 
 Android and desktop offer a **Scan** button with a dropdown for **Continue Scan**.
-Scan recomputes hashes and visual analysis, bypassing saved analysis and checkpoints.
+Desktop Scan automatically reuses valid hashes and visual analysis from the app
+database and `.media-cleaner-cache`, processing new or changed files and rebuilding
+matching groups. Android Scan recomputes analysis.
 Continue Scan resumes a paused/interrupted checkpoint, or reuses valid analysis
 from a completed scan. Desktop continuation after completion uses the current
 folder and scan options; Android continues the saved media selection.
-Desktop bypasses database and `.media-cleaner-cache` analysis for fresh scans.
-New results are cached normally. Source media and cleanup history are preserved.
+Desktop saves new analysis automatically. Source media and cleanup history are preserved.
 
 ## Use
 

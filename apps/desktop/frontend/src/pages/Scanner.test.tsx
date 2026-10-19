@@ -68,7 +68,7 @@ describe("scanner", () => {
       (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
         .body as string,
     );
-    expect(body.force_rescan).toBe(true);
+    expect(body.force_rescan).toBe(false);
     expect(body.mode).toBe("similar");
     expect(body.sensitivity).toBe("maximum");
     expect(body.video_samples).toBe(18);

@@ -204,7 +204,7 @@ export function Scanner({
               if (!hasCheckpoint) return;
               if (scan.data?.status === "completed") start.mutate(false);
               else control.mutate("resume");
-            } else start.mutate(true);
+            } else start.mutate(false);
           }}
         >
           <section className="scan-setup-section" aria-label="Media folders">
@@ -473,8 +473,9 @@ export function Scanner({
                     Continue Scan
                   </button>
                   <p className="hint">
-                    Scan recomputes analysis. Continue Scan uses saved
-                    checkpoints and analysis.
+                    Scan automatically reuses saved analysis for unchanged files
+                    and processes new or changed files. Continue Scan resumes
+                    saved progress or reuses completed analysis.
                   </p>
                 </div>
               </details>
