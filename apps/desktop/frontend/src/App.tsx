@@ -422,7 +422,11 @@ export function App() {
                 </div>
               </div>
               {preview && (
-                <GroupPreview {...preview} onClose={() => setPreview(null)} />
+                <GroupPreview
+                  {...preview}
+                  onPlan={setPlan}
+                  onClose={() => setPreview(null)}
+                />
               )}
               {plan && (
                 <CleanupDialog

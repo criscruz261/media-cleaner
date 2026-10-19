@@ -177,8 +177,11 @@ it("uses deletion selections by default and saves them without a review button",
         name: "Mark selections reviewed for batch deletion",
       }),
     ).not.toBeInTheDocument();
-    fireEvent.click(boxes[1]);
+    const card = boxes[1].closest(".media-card")!;
+    expect(card).not.toHaveClass("kept");
+    fireEvent.click(card);
     await waitFor(() => expect(boxes[1]).not.toBeChecked());
+    expect(card).toHaveClass("kept");
     const request = fetch.mock.calls.find(([url]) => url.endsWith("/review"));
     expect(JSON.parse(request![1]!.body as string)).toEqual({
       changes: { "1": true },

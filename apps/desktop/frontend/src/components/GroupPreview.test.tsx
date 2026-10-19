@@ -43,6 +43,19 @@ it("navigates across group pages, zooms, and saves deletion choices without clea
       </QueryClientProvider>,
     );
     await screen.findByText("200 / 201");
+    expect(
+      screen.getByRole("button", {
+        name: "Unselect all for deletion (keep all)",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Select all for deletion (keep none)",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Delete selected/ }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
     expect(screen.getByText("125%")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));

@@ -51,7 +51,7 @@ export function ShutdownControl({ onStopped }: { onStopped: () => void }) {
             <section
               ref={panel}
               tabIndex={-1}
-              className="cleanup-dialog"
+              className="cleanup-dialog shutdown-confirm"
               onKeyDown={(event) => {
                 if (event.key === "Tab") {
                   const items = [

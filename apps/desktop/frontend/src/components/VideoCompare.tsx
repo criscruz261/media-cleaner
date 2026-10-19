@@ -188,7 +188,10 @@ function Comparison({
         <ErrorMessage error={files.error || selection.error || error} />
         <div className="media-grid">
           {files.data?.map((file) => (
-            <div className="media-card" key={file.id}>
+            <div
+              className={`media-card ${!file.keep ? "selected-for-deletion" : ""}`}
+              key={file.id}
+            >
               <label className="checkbox-label">
                 <input
                   type="checkbox"

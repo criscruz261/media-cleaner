@@ -1,10 +1,13 @@
+import { Trash2 } from "lucide-react";
+import { VideoCompare } from "./VideoCompare";
+import { useCleanupDestination } from "./CleanupDestinationContext";
 import { usePopupKeyboard } from "./usePopupKeyboard";
 import { ScanProgress } from "./ScanProgress";
 import { createContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, prefix } from "../services/api";
-import type { Group, MediaFile } from "../types/api";
+import type { Cleanup, Group, MediaFile } from "../types/api";
 import { ErrorMessage } from "./ui";
 
 export const PreviewContext = createContext<
@@ -16,12 +19,15 @@ export function GroupPreview({
   initialId,
   onClose,
   scanId,
+  onPlan,
 }: {
   groupId: string;
   initialId: string;
   onClose: () => void;
   scanId?: string;
+  onPlan?: (plan: Cleanup) => void;
 }) {
+  const [destination] = useCleanupDestination();
   const [currentId, setCurrentId] = useState(initialId);
   const [zoom, setZoom] = useState(1);
   const [failed, setFailed] = useState(false);
@@ -57,6 +63,33 @@ export function GroupPreview({
     },
     onSettled: () => setPendingChoice(null),
   });
+  const selectAll = useMutation({
+    mutationFn: (keepAll: boolean) =>
+      api(
+        `/groups/${groupId}/review`,
+        keepAll ? { keep_all: true } : { keep_ids: [] },
+      ),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["selection-summary"] });
+      return client.invalidateQueries({ queryKey: ["group", groupId] });
+    },
+  });
+  const selected = files.filter(
+    (item) => !item.keep && item.status === "ready",
+  );
+  const plan = useMutation({
+    mutationFn: () =>
+      api<Cleanup>("/cleanup/plan", {
+        group_id: groupId,
+        file_ids: selected.map((item) => item.id),
+        destination,
+      }),
+    onSuccess: (result) => {
+      onClose();
+      onPlan?.(result);
+    },
+  });
+  const busy = review.isPending || selectAll.isPending || plan.isPending;
   const move = (direction: number) => {
     const next = files[index + direction];
     if (next) {
@@ -91,7 +124,7 @@ export function GroupPreview({
     <div className="modal-backdrop group-preview-backdrop" onClick={onClose}>
       <section
         ref={root}
-        className="group-preview"
+        className={`group-preview ${file && !(pendingChoice?.id === file.id ? pendingChoice.keep : file.keep) ? "selected-for-deletion" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="Group preview"
@@ -164,9 +197,7 @@ export function GroupPreview({
                     : file.keep)
                 }
                 disabled={
-                  review.isPending ||
-                  !!file.protected_reason ||
-                  file.status !== "ready"
+                  busy || !!file.protected_reason || file.status !== "ready"
                 }
                 onChange={() => {
                   const choice = { id: file.id, keep: !file.keep };
@@ -176,6 +207,33 @@ export function GroupPreview({
               />
               Select for deletion
             </label>
+          )}
+        </div>
+        <div className="group-preview-actions" aria-label="Group actions">
+          <button
+            disabled={busy || !files.length}
+            className="action-keep"
+            onClick={() => selectAll.mutate(true)}
+          >
+            Unselect all for deletion (keep all)
+          </button>
+          <button
+            disabled={busy || !files.length}
+            className="action-select-delete"
+            onClick={() => selectAll.mutate(false)}
+          >
+            Select all for deletion (keep none)
+          </button>
+          <button
+            className="action-delete group-delete-selected"
+            disabled={busy || !selected.length || !onPlan}
+            onClick={() => plan.mutate()}
+          >
+            <Trash2 size={15} aria-hidden="true" /> Delete selected ·{" "}
+            {selected.length} in this group
+          </button>
+          {files.some((item) => item.media_type === "video") && (
+            <VideoCompare groupId={groupId} scanId={scanId} />
           )}
         </div>
         <strong className="group-preview-name">
@@ -239,7 +297,9 @@ export function GroupPreview({
             </p>
           ) : null}
         </div>
-        <ErrorMessage error={detail.error || review.error} />
+        <ErrorMessage
+          error={detail.error || review.error || selectAll.error || plan.error}
+        />
       </section>
     </div>,
     document.body,

@@ -9,6 +9,9 @@
   color: #233c32;
   background: #f7f8f5;
   font-synthesis: none;
+  --delete-background: #ff8585;
+  --delete-border: #dc2626;
+  --delete-ink: #650b0b;
   --surface: #fff;
   --canvas: #f7f8f5;
   --border: #e2e7df;
@@ -1119,7 +1122,8 @@ footer span:last-child {
 }
 
 .cleanup-dialog {
-  width: min(1400px, 100%);
+  width: min(760px, 100%);
+  margin: auto;
   max-height: calc(100dvh - 40px);
   overflow: auto;
   background: var(--surface);
@@ -1162,16 +1166,16 @@ footer span:last-child {
   color: #173d24;
 }
 .cleanup-review-deleted {
-  background: #ffc9c4;
-  border: 2px solid #c7372b;
-  color: #681b16;
+  background: var(--delete-background);
+  border: 2px solid var(--delete-border);
+  color: var(--delete-ink);
 }
 .cleanup-review-deleted .cleanup-review-file {
-  background: #ffaaa2;
-  border: 2px solid #b72c23;
+  background: var(--delete-background);
+  border: 2px solid var(--delete-border);
 }
 .cleanup-review-deleted h4 {
-  color: #831d16;
+  color: var(--delete-ink);
   font-weight: 800;
 }
 .cleanup-review-columns h4 {
@@ -1885,8 +1889,8 @@ footer span:last-child {
   border-color: #83b58e;
 }
 .group-card .media-card:not(.kept) {
-  background: #ffb6ae;
-  border-color: #c7372b;
+  background: var(--delete-background);
+  border-color: var(--delete-border);
 }
 .group-card .media-card > .checkbox-label {
   font-size: 11px;
@@ -1976,7 +1980,7 @@ footer span:last-child {
   color: #143d22;
 }
 .group-card .media-card:not(.kept) {
-  color: #58170f;
+  color: var(--delete-ink);
 }
 .group-card .media-card .file-path,
 .group-card .media-card .file-meta,
@@ -2613,7 +2617,7 @@ input[type="range"] {
 .scan-history-row .actions { display: flex; gap: .35rem; margin: 0; }
 .scan-history-row button { padding: .3rem .5rem; min-height: 30px; white-space: nowrap; }
 
-.scan-history button.scan-history-delete {
+.scan-history button.scan-history-delete, button.action-delete {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
@@ -2621,7 +2625,7 @@ input[type="range"] {
   border-color: #b91c1c;
   color: #fff;
 }
-.scan-history button.scan-history-delete:hover:not(:disabled) {
+.scan-history button.scan-history-delete:hover:not(:disabled), button.action-delete:hover:not(:disabled) {
   background: #991b1b;
   border-color: #991b1b;
 }
@@ -2647,7 +2651,10 @@ input[type="range"] {
   position: fixed;
   inset: 0;
   margin: auto;
-  max-width: min(30rem, calc(100vw - 2rem));
+  width: min(30rem, calc(100vw - 2rem));
+  height: fit-content;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
   padding: 1.5rem;
   border: 1px solid var(--border);
   border-radius: .75rem;
@@ -2655,3 +2662,50 @@ input[type="range"] {
   color: inherit;
 }
 .scan-history-confirm::backdrop { background: #0008; }
+
+.group-card .media-card { cursor: pointer; transition: background-color .15s, border-color .15s; }
+.group-card .media-card.kept { background: #edf8ef; border-color: #9bcba5; }
+.group-card .media-card:not(.kept) { background: var(--delete-background); border-color: var(--delete-border); }
+.group-preview-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem 1rem; flex-shrink: 0; }
+
+.shutdown-confirm { width: min(480px, 100%); }
+@media (max-width: 600px) {
+  .cleanup-dialog .cleanup-review-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+.video-compare-modal .media-card.selected-for-deletion,
+.group-preview.selected-for-deletion .group-preview-name,
+.group-preview.selected-for-deletion .group-preview-actions {
+  background: var(--delete-background);
+  color: var(--delete-ink);
+  border-color: var(--delete-border);
+}
+.group-card .media-card:not(.kept) input,
+.video-compare-modal .selected-for-deletion input,
+.group-preview.selected-for-deletion input { accent-color: var(--delete-border); }
+
+button.action-keep {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+button.action-keep:hover:not(:disabled) { background: #166534; border-color: #166534; }
+
+button.action-select-delete {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+button.action-select-delete:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #f87171;
+}
+.group-actionbar .group-actions .group-delete-selected,
+.group-preview-actions .group-delete-selected {
+  order: 10;
+  margin-left: auto;
+  align-self: flex-end;
+}

@@ -8,7 +8,7 @@ import { BatchCleanup } from "../components/BatchCleanup";
 import { VideoCompare } from "../components/VideoCompare";
 import { useState, useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ShieldCheck, ArrowRight, Layers3 } from "lucide-react";
+import { Check, ShieldCheck, ArrowRight, Layers3, Trash2 } from "lucide-react";
 import { api, bytes, displayLabel } from "../services/api";
 import type { Page, Group, Cleanup } from "../types/api";
 import { Empty, ErrorMessage, Loading, Pagination } from "../components/ui";
@@ -238,6 +238,7 @@ export function GroupCard({
           groupId={group.id}
           initialId={previewId}
           scanId={group.scan_id}
+          onPlan={onPlan}
           onClose={() => setPreviewId(null)}
         />
       )}
@@ -331,6 +332,23 @@ export function GroupCard({
           {detail.data?.files.map((file) => (
             <div
               className={`media-card ${file.keep ? "kept" : ""}`}
+              onClick={(event) => {
+                if (
+                  (event.target as HTMLElement).closest(
+                    "button, input, label, a, video",
+                  )
+                )
+                  return;
+                if (
+                  review.isPending ||
+                  selectAll.isPending ||
+                  plan.isPending ||
+                  file.protected_reason ||
+                  file.status !== "ready"
+                )
+                  return;
+                review.mutate({ id: file.id, keep: !file.keep });
+              }}
               key={file.id}
             >
               <label className="checkbox-label">
@@ -419,6 +437,7 @@ export function GroupCard({
             <VideoCompare groupId={group.id} scanId={group.scan_id} />
           )}
           <button
+            className={allSelected ? "action-keep" : "action-select-delete"}
             disabled={
               !detail.data ||
               selectAll.isPending ||
@@ -432,7 +451,7 @@ export function GroupCard({
               : "Select all for deletion (keep none)"}
           </button>
           <button
-            className="primary"
+            className="action-delete group-delete-selected"
             disabled={
               !selectedCount ||
               plan.isPending ||
@@ -441,8 +460,9 @@ export function GroupCard({
             }
             onClick={() => plan.mutate()}
           >
+            <Trash2 size={15} aria-hidden="true" />
             {selectForDeletion ? "Delete selected" : "Delete unchecked"} ·{" "}
-            {selectedCount} in this group <ArrowRight size={15} />
+            {selectedCount} in this group
           </button>
         </div>
         <details className="group-selection-help">
