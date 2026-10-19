@@ -2584,3 +2584,74 @@ input[type="range"] {
   line-height: 1.2;
   white-space: normal;
 }
+
+.scan-history-heading, .review-history-back {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+.scan-history-heading h2 { margin: 0; font-size: 1rem; }
+.scan-history-table-scroll { overflow-x: auto; }
+.scan-history-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.scan-history-table th, .scan-history-table td {
+  text-align: left;
+  padding: .4rem .5rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.scan-history-table th { font-weight: 600; color: var(--muted); }
+.scan-history-table input[type="checkbox"] { margin: 0; }
+.scan-history-roots {
+  display: block;
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-history-row .actions { display: flex; gap: .35rem; margin: 0; }
+.scan-history-row button { padding: .3rem .5rem; min-height: 30px; white-space: nowrap; }
+
+.scan-history button.scan-history-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+.scan-history button.scan-history-delete:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
+}
+
+.scan-history-action-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.scan-history-action-heading button { padding: .3rem .5rem; min-height: 30px; white-space: nowrap; }
+.scan-history-row .actions { justify-content: flex-end; }
+
+.scan-history-error-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  max-width: min(28rem, calc(100vw - 3rem));
+  padding: .85rem 1rem;
+  border-radius: .5rem;
+  background: #991b1b;
+  color: #fff;
+  box-shadow: 0 4px 20px #0003;
+}
+
+.scan-history-confirm {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+.scan-history-confirm::backdrop { background: #0008; }

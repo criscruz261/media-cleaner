@@ -39,3 +39,12 @@ class SelectedPlanRequest(BaseModel):
     classification: Literal["EXACT_DUPLICATE", "SIMILAR_CONTENT"] | None = None
     scan_id: str
     destination: Literal["trash", "quarantine"] = "trash"
+
+
+class ScanFavoriteRequest(BaseModel):
+    favorite: bool
+
+
+class DeleteScanHistoryRequest(BaseModel):
+    scan_ids: list[str] = Field(min_length=1, max_length=200)
+    confirmed: bool = False

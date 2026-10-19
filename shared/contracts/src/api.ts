@@ -1,5 +1,6 @@
 export type Page<T> = { items: T[]; total: number };
 export type Scan = {
+  favorite?: boolean;
   id: string;
   status: string;
   stage: string;

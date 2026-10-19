@@ -1,3 +1,4 @@
+import { ScanHistory } from "../components/ScanHistory";
 import { useCompactGroups } from "../components/CompactGroupsContext";
 import { useCleanupDestination } from "../components/CleanupDestinationContext";
 import { groupPage } from "../services/groupPages";
@@ -9,7 +10,7 @@ import { useState, useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldCheck, ArrowRight, Layers3 } from "lucide-react";
 import { api, bytes, displayLabel } from "../services/api";
-import type { Scan, Page, Group, Cleanup } from "../types/api";
+import type { Page, Group, Cleanup } from "../types/api";
 import { Empty, ErrorMessage, Loading, Pagination } from "../components/ui";
 import { MediaPreview } from "../components/MediaPreview";
 export function Review({
@@ -23,14 +24,53 @@ export function Review({
   onPlan: (plan: Cleanup) => void;
   navigate: (page: string) => void;
 }) {
+  const [reviewId, setReviewId] = useState("");
+  if (!reviewId)
+    return (
+      <>
+        <div className="page-heading">
+          <div>
+            <h1>Duplicate review</h1>
+            <p>Choose a scan below to review its results.</p>
+          </div>
+        </div>
+        <ScanHistory
+          scanId={scanId}
+          selectScan={(id) => {
+            selectScan(id);
+            setReviewId(id);
+          }}
+        />
+      </>
+    );
+  return (
+    <>
+      <div className="review-history-back">
+        <button onClick={() => setReviewId("")}>← Back to scan history</button>
+        <span className="hint">Scan {reviewId.slice(0, 8)}</span>
+      </div>
+      <ReviewResults
+        key={reviewId}
+        scanId={reviewId}
+        onPlan={onPlan}
+        navigate={navigate}
+      />
+    </>
+  );
+}
+function ReviewResults({
+  scanId,
+  onPlan,
+  navigate,
+}: {
+  scanId: string;
+  onPlan: (plan: Cleanup) => void;
+  navigate: (page: string) => void;
+}) {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [classification, setClassification] = useGroupFilter();
   const [sort, setSort] = useState("discovered");
-  const scans = useQuery({
-    queryKey: ["scans"],
-    queryFn: () => api<Page<Scan>>("/scans?limit=100"),
-  });
   const groups = useQuery({
     queryKey: ["groups", scanId, offset, classification, sort, pageSize],
     queryFn: () =>
@@ -71,27 +111,7 @@ export function Review({
           setSort(order);
           setOffset(0);
         }}
-      >
-        <label className="review-scan-selector">
-          Choose a scan
-          <select
-            aria-label="Choose scan to review"
-            value={scanId}
-            onChange={(e) => {
-              selectScan(e.target.value);
-              setOffset(0);
-            }}
-          >
-            <option value="">Choose a scan</option>
-            {scans.data?.items.map((scan) => (
-              <option value={scan.id} key={scan.id}>
-                {new Date(scan.created_at).toLocaleString()} ·{" "}
-                {displayLabel(scan.status)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </GroupFilters>
+      />
       {!scanId ? (
         <Empty title="Choose a scan to review">
           <button onClick={() => navigate("Scanner")}>
@@ -224,8 +244,13 @@ export function GroupCard({
       <div className="group-summary">
         {position !== undefined && totalGroups !== undefined && (
           <div className="group-position">
-            <strong>Group {position} of {totalGroups}</strong>
-            <span>{Math.max(0, totalGroups - position)} more after this · current filter</span>
+            <strong>
+              Group {position} of {totalGroups}
+            </strong>
+            <span>
+              {Math.max(0, totalGroups - position)} more after this · current
+              filter
+            </span>
           </div>
         )}
         <div className="section-heading">

@@ -26,6 +26,8 @@ class Volume(Base):
 
 
 class ScanJob(Base):
+    favorite: Mapped[bool] = mapped_column(default=False, server_default="0")
+    history_deleted: Mapped[bool] = mapped_column(default=False, server_default="0")
     __tablename__ = "scan_jobs"
     id: Mapped[str] = mapped_column(primary_key=True, default=uid)
     status: Mapped[str] = mapped_column(default="queued", index=True)

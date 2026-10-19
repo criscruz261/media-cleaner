@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, func, case
 from app.api.schemas import (
+    ScanFavoriteRequest,
+    DeleteScanHistoryRequest,
     SelectedPlanRequest,
     ScanRequest,
     ReviewRequest,
@@ -262,18 +264,44 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "items": [
                     record(job)
                     for job in session.scalars(
-                        select(ScanJob).order_by(ScanJob.created_at.desc()).offset(offset).limit(limit)
+                        select(ScanJob).where(ScanJob.history_deleted.is_(False)).order_by(ScanJob.created_at.desc()).offset(offset).limit(limit)
                     )
                 ],
-                "total": session.scalar(select(func.count()).select_from(ScanJob)),
+                "total": session.scalar(select(func.count()).select_from(ScanJob).where(ScanJob.history_deleted.is_(False))),
             }
+
+    @app.post("/api/v1/scans/history/delete")
+    def delete_scan_history(value: DeleteScanHistoryRequest):
+        if not value.confirmed:
+            raise ValueError("Confirm deleting the selected scan history")
+        with manager.lock, sessions.begin() as session:
+            jobs = [session.get(ScanJob, scan_id) for scan_id in set(value.scan_ids)]
+            if any(job is None or job.history_deleted for job in jobs):
+                raise ValueError("Scan not found in history")
+            if any(job.favorite for job in jobs):
+                raise ValueError("Favorite scans are protected; remove the favorite before deleting")
+            if any(job.status in {"queued", "running"} or job.id in manager.checkpointing for job in jobs):
+                raise ValueError("Pause or stop active scans before deleting their history")
+            for job in jobs:
+                job.history_deleted = True
+            return {"deleted_ids": [job.id for job in jobs]}
+
+    @app.post("/api/v1/scans/{scan_id}/favorite")
+    def favorite_scan(scan_id: str, value: ScanFavoriteRequest):
+        with manager.lock, sessions.begin() as session:
+            job = session.get(ScanJob, scan_id)
+            if not job or job.history_deleted:
+                raise HTTPException(404, "Scan not found")
+            job.favorite = value.favorite
+            session.flush()
+            return record(job)
 
     @app.get("/api/v1/scans/active")
     def active_scan():
         with sessions() as session:
             job = session.scalar(
                 select(ScanJob)
-                .where(ScanJob.status.in_(["queued", "running", "paused", "interrupted"]))
+                .where(ScanJob.history_deleted.is_(False), ScanJob.status.in_(["queued", "running", "paused", "interrupted"]))
                 .order_by(
                     case((ScanJob.status.in_(["queued", "running"]), 0), else_=1), ScanJob.created_at.desc()
                 )
