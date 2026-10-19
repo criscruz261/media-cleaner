@@ -66,9 +66,11 @@ def test_disconnected_root_does_not_remove_history(client, workspace, monkeypatc
     assert client.get("/api/v1/groups?scan_id=" + old_id).json()["total"] == 1
 
 
-def test_startup_marks_interrupted_jobs_and_cleanup(tmp_path):
+def test_startup_marks_interrupted_jobs_and_cleanup(tmp_path, monkeypatch):
     data = (tmp_path / "data").resolve()
     app = create_app(data, token="test")
+    # Simulate abrupt termination without the graceful shutdown checkpoint.
+    monkeypatch.setattr(app.state.manager, "prepare_shutdown", app.state.manager.close)
     with TestClient(app, base_url="http://127.0.0.1:8765", headers={"Authorization": "Bearer test"}):
         with app.state.sessions.begin() as session:
             session.add(ScanJob(status="running", options={"roots": []}))
@@ -422,6 +424,56 @@ def test_checkpoint_waits_for_worker_and_shutdown_preserves_resumable_scan(clien
         assert state["status"] == "completed", state
         assert state["processed"] == 3
         assert rehashed == ["waiting.mp4"]
+
+
+def test_shutdown_prevents_queued_worker_restarting(client):
+    manager = client.app.state.manager
+    with manager.sessions.begin() as session:
+        job = ScanJob(status="queued", options={"roots": []})
+        session.add(job)
+        session.flush()
+        scan_id = job.id
+    manager.prepare_shutdown()
+    # A submitted worker can enter run after shutdown has paused its job.
+    manager.run(scan_id)
+    with manager.sessions() as session:
+        assert session.get(ScanJob, scan_id).status == "paused"
+
+
+def test_server_shutdown_saves_resumable_scan(tmp_path, workspace, monkeypatch):
+    import time
+
+    (workspace / "unfinished.mp4").write_bytes(b"video")
+    (workspace / "unfinished copy.mp4").write_bytes(b"video")
+    started = threading.Event()
+
+    def controlled(path, expected, checkpoint, progress=None):
+        started.set()
+        while True:
+            checkpoint()
+            time.sleep(0.01)
+
+    monkeypatch.setattr("app.workers.manager.hash_file", controlled)
+    data = tmp_path / "shutdown-data"
+    app = create_app(data, token="shutdown-test")
+    headers = {"Authorization": "Bearer shutdown-test"}
+    with TestClient(app, base_url="http://127.0.0.1:8765", headers=headers) as client:
+        job = client.post("/api/v1/scans", json={"roots": [str(workspace)]}).json()
+        assert started.wait(5)
+    assert app.state.manager.active.done()
+
+    monkeypatch.setattr("app.workers.manager.hash_file", real_hash)
+    with TestClient(
+        create_app(data, token="shutdown-test"),
+        base_url="http://127.0.0.1:8765",
+        headers=headers,
+    ) as reopened:
+        state = reopened.get(f"/api/v1/scans/{job['id']}").json()
+        assert state["status"] == "paused"
+        assert "Checkpoint saved" in state["stage"]
+        assert reopened.post(f"/api/v1/scans/{job['id']}/resume").status_code == 200
+        wait_worker(reopened)
+        assert reopened.get(f"/api/v1/scans/{job['id']}").json()["status"] == "completed"
 
 
 def test_exact_live_group_preselects_one_keeper_before_scan_finishes(client, workspace):

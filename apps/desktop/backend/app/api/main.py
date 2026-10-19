@@ -1,4 +1,5 @@
 from typing import Literal
+from dataclasses import replace
 import asyncio
 from contextlib import asynccontextmanager
 import json
@@ -64,7 +65,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
     @asynccontextmanager
     async def lifespan(_app):
         yield
-        manager.close()
+        manager.prepare_shutdown()
         engine.dispose()
 
     app = FastAPI(
@@ -495,6 +496,21 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                 "warnings": metadata.warnings if metadata else [],
             }
 
+    def preview_source(file):
+        path, saved = Path(file.path), stored_identity(file)
+        try:
+            current = identity(path)
+        except OSError:
+            raise HTTPException(404, "Media unavailable; reconnect its drive")
+        except ValueError:
+            raise HTTPException(409, "Media path changed since scanning")
+        # Device numbers can change after a drive is remounted. For viewing only,
+        # accept that change when inode, size and both timestamps still match.
+        # Keep the saved identity intact for cleanup and scan recovery checks.
+        if replace(current, device=saved.device) != saved:
+            raise HTTPException(409, "Media changed since scanning")
+        return path, current
+
     @app.get("/api/v1/files/{file_id}/thumbnail")
     def file_thumbnail(file_id: str):
         from app.metadata.thumbnails import thumbnail
@@ -508,9 +524,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             )
             if file.status != "ready" and not processing:
                 raise HTTPException(404, "Media unavailable")
-            path, expected = Path(file.path), stored_identity(file)
-            if identity(path) != expected:
-                raise HTTPException(409, "Media changed since scanning")
+            path, expected = preview_source(file)
             try:
                 data = thumbnail(str(path), expected.key(str(path)), file.media_type)
             except Exception:
@@ -525,9 +539,7 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
             file = session.get(File, file_id)
             if not file or file.status != "ready":
                 raise HTTPException(404, "Media unavailable")
-            path = Path(file.path)
-            if identity(path) != stored_identity(file):
-                raise HTTPException(409, "Media changed since scanning")
+            path, expected = preview_source(file)
             if file.media_type == "image":
                 from io import BytesIO
 
@@ -538,9 +550,11 @@ def create_app(directory: Path | None = None, token: str | None = None, frontend
                     image = load_still(path)
                     output = BytesIO()
                     image.save(output, "JPEG", quality=85)
-                    return StreamingResponse(iter([output.getvalue()]), media_type="image/jpeg")
                 except Exception:
                     raise HTTPException(415, "Image preview unavailable; exact comparison still works")
+                if identity(path) != expected:
+                    raise HTTPException(409, "Media changed since scanning")
+                return StreamingResponse(iter([output.getvalue()]), media_type="image/jpeg")
             return FileResponse(path, media_type=file.mime_type)  # Starlette supports byte ranges.
 
     @app.get("/api/v1/groups")

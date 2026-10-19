@@ -83,8 +83,10 @@ class JobManager:
         log.info("scan_started", extra={"scan_id": scan_id})
         matcher = None
         try:
-            with self.sessions.begin() as session:
+            with self.lock, self.sessions.begin() as session:
                 job = session.get(ScanJob, scan_id)
+                if self.stopping or job.status not in {"queued", "running"}:
+                    raise ScanStopped()
                 job.status, job.stage = "running", "discovery"
                 options = job.options
                 job.processed = session.scalar(

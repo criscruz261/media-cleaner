@@ -72,6 +72,21 @@ final class Store extends SQLiteOpenHelper {
     }
   }
 
+  synchronized void prepareScan(String album, String sensitivity, int samples) {
+    SQLiteDatabase db = getWritableDatabase();
+    db.beginTransaction();
+    try {
+      put("album", album);
+      put("scan_sensitivity", sensitivity);
+      put("scan_samples", Integer.toString(samples));
+      put("status", "running");
+      touch();
+      db.setTransactionSuccessful();
+    } finally {
+      db.endTransaction();
+    }
+  }
+
   synchronized void begin(String album, int total) {
     SQLiteDatabase db = getWritableDatabase();
     db.beginTransaction();

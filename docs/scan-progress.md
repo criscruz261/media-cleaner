@@ -10,6 +10,10 @@ SQLite saves each completed file, identity, metadata, digest/descriptors, counte
 
 Checkpoints are per completed file, not an open-directory cursor or partial SHA-256/decoder state. An unfinished file restarts safely; discovery and lightweight grouping may repeat. Current-file activity is transient. A decoder that was unavailable or skipped remains reported in warnings; install the needed tools and start a new scan to retry those comparisons. The app database remains in its local data directory; browser storage alone is not the checkpoint.
 
+Graceful desktop server shutdown also pauses scans and waits for workers before closing the database. Reopen the app and choose **Resume**. Android saves the selected album and scan settings before discovery starts, so shutting down during discovery preserves the scope for **Continue Scan**. Completed files remain saved; unfinished files restart.
+
+Desktop thumbnails and previews from saved results remain viewable after a drive remount changes its device number, provided the file path, inode, size and modification/change timestamps still match. This viewing check does not update saved identities or relax cleanup verification. Reconnect an unavailable drive to view its media.
+
 ## Folder-local checkpoints
 
 Each entered root stores completed-file analysis in `.media-cleaner-cache/<key prefix>/<identity key>.json`. Files are written atomically after processing; explicit review choices update the corresponding entries. Multiple entered roots each keep their own file entries; overlapping roots use the deepest selected root. The cache is always excluded from discovery, including hidden-file scans, and is ignored by Git.

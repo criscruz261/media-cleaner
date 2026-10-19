@@ -72,8 +72,8 @@ public final class ScanService extends Service {
             ? Integer.parseInt(store.meta("scan_samples", "9"))
             : intent.getIntExtra("video_samples", 9);
     samples = Math.max(6, Math.min(24, samples));
-    store.put("scan_sensitivity", sensitivity);
-    store.put("scan_samples", Integer.toString(samples));
+    // Save the selected scope before discovery, which can itself be interrupted.
+    store.prepareScan(selected, sensitivity, samples);
     final String selectedSensitivity = sensitivity;
     final int selectedSamples = samples;
     executor.submit(() -> scan(selected, forceRescan, selectedSensitivity, selectedSamples));

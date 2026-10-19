@@ -135,6 +135,60 @@ def test_thumbnails_are_cached_and_reject_changed_sources(client, workspace, mon
     thumbnail.cache_clear()
 
 
+def test_saved_results_previews_survive_drive_device_change(client, workspace):
+    from app.database.models import File
+    from app.core.filesystem import stored_identity
+    from conftest import duplicate_group
+
+    Image.new("RGB", (80, 60), "green").save(workspace / "photo.png")
+    job = scan(client, [workspace])
+    file = client.get(f"/api/v1/files?scan_id={job['id']}").json()["items"][0]
+    with client.app.state.sessions.begin() as session:
+        saved = session.get(File, file["id"])
+        saved.device = "previous-mount-device"
+
+    for endpoint in ("thumbnail", "preview"):
+        response = client.get(f"/api/v1/files/{file['id']}/{endpoint}")
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"] == "image/jpeg"
+    with client.app.state.sessions() as session:
+        saved = session.get(File, file["id"])
+        assert saved.device == "previous-mount-device"
+        assert stored_identity(saved) != identity(workspace / "photo.png")
+
+    # Cleanup still uses the full saved identity, including device number.
+    group = duplicate_group(client, workspace)
+    unwanted = next(file for file in group["files"] if file["id"] != group["recommended_id"])
+    with client.app.state.sessions.begin() as session:
+        session.get(File, unwanted["id"]).device = "previous-mount-device"
+    response = client.post(
+        "/api/v1/cleanup/plan",
+        json={"file_ids": [unwanted["id"]], "group_id": group["id"], "destination": "quarantine"},
+    )
+    assert response.status_code == 400
+
+
+def test_saved_results_previews_reject_other_identity_changes(client, workspace):
+    from app.database.models import File
+
+    path = workspace / "photo.png"
+    Image.new("RGB", (80, 60), "green").save(path)
+    job = scan(client, [workspace])
+    file = client.get(f"/api/v1/files?scan_id={job['id']}").json()["items"][0]
+    for field in ("inode", "size", "mtime_ns", "ctime_ns"):
+        with client.app.state.sessions.begin() as session:
+            saved = session.get(File, file["id"])
+            original = getattr(saved, field)
+            setattr(saved, field, original + 1 if isinstance(original, int) else str(int(original) + 1))
+        for endpoint in ("thumbnail", "preview"):
+            assert client.get(f"/api/v1/files/{file['id']}/{endpoint}").status_code == 409
+        with client.app.state.sessions.begin() as session:
+            setattr(session.get(File, file["id"]), field, original)
+    path.unlink()
+    for endpoint in ("thumbnail", "preview"):
+        assert client.get(f"/api/v1/files/{file['id']}/{endpoint}").status_code == 404
+
+
 def test_system_trash_and_empty_media_are_always_excluded(client, workspace):
     (workspace / "original.mp4").write_bytes(b"video")
     (workspace / "original copy.mp4").write_bytes(b"video")
